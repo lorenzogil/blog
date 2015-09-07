@@ -1,0 +1,66 @@
+---
+layout: post
+title: PyCON 2011 (Part 2)
+date: 2011-03-17 03:41:00.000000000 -07:00
+categories:
+- Viajes
+- Yaco
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<figure>
+<a href="/blog/assets/IMG_20110312_074055.jpg"><img class="size-medium wp-image-321" title="Welcome to PyCON!" src="/blog/assets/IMG_20110312_074055-300x225.jpg" alt="" width="300" height="225" /></a>
+  <figcaption>It was 8am and I was ready for more talks!</figcaption>
+</figure>
+
+<p>The second day of the PyCON conference started with a talk by the Dropbox guys. The first half of it was not really interesting but things go better on the second half when they started to explain the technical bits. Then Guido was interviewed and answered some questions that the community had elaborated for him. One of the things he said is that Python 3 is closer than you think. I can tell he is right since many sprints at PyCON were about porting existing libraries to Python 3 and there is a general momentum going in that direction. Then they gave him a big cake representing the 20th birthday of the language.</p>
+<p><iframe src="http://player.vimeo.com/video/21137176" width="400" height="265" frameborder="0"></iframe></p>
+<p>PyCON moment where Guido is given a big cake representing the 20th python birthday</p>
+<p>Then <a href="http://us.pycon.org/2011/schedule/presentations/246/" target="_self">I learned</a> about the new Selenium 2 and that it doesn't need the ugly selenium-remote-control if you just run it on your own machine so that becomes much easier to use. The speaker was showing how to write tests using the python client library and it looked very very good.</p>
+<p>After that talk I went to the <a href="http://us.pycon.org/2011/schedule/presentations/165/" target="_self">zc.buildout talk</a> where Jim Fulton explained how they deploy python projects based on buildout on Redhat based systems. Something very similar to what we do at Yaco. On the reasons they do this is because Zope Corporation hosts their own applications so their sysadmin department and their development department need to play well with each other. He explained how the have two different buidouts for each application: one for the application itself and a different one for its configuration. You can read more about his great talk at <a href="http://www.riversnake.com/pycon2011/full/" target="_self">http://www.riversnake.com/pycon2011/full/</a> or, if you are in a hurry, just check out his <a href="http://www.riversnake.com/pycon2011/" target="_self">slides</a></p>
+<figure>
+  <a href="/blog/assets/IMG_20110312_112243.jpg"><img class="size-medium wp-image-322" title="Zope Pope" src="/blog/assets/IMG_20110312_112243-224x300.jpg" alt="" width="224" height="300" /></a>
+  <figcaption>Jim Fulton speaking about zc.buildout</figcaption>
+</figure>
+
+<p>Then I went to the talk <a href="http://en.wikipedia.org/wiki/Alex_Martelli" target="_self">Alex Martelli</a> gave: <a href="http://us.pycon.org/2011/schedule/presentations/88/" target="_self">API design anti-patterns</a>. and these are some of the things I learned:</p>
+<ul>
+<li>You better have a API for your software because you are going to need it sooner or later. Otherwise programmers are going to start using your applications in very nasty ways you can't even predict.</li>
+<li>APIs don't just grow up magically, you have to deeply thing about them. It's harder to change an API than to change the user interface of your software because the consumers of the former (programms) are so much less flexible than the consumers of the later (humans)</li>
+<li>A good way to design an API is to use it by yourself in your own software. This forces you to think what's the main thing that my program does and what the absolute minimum amount of features that should go into the core. I believe we are doing the right thing here in <a href="http://www.merengueproject.org/" target="_self">Merengue</a> :-)</li>
+</ul>
+<p>After that, I went to the <a href="http://us.pycon.org/2011/schedule/presentations/140/" target="_self">talk about http libraries in Python</a>. It was given by a Mercurial guy who did a very good analysis of how bad all Python http libraries are except for pycurl, which is very difficult to use. That's why he wrote <a href="http://code.google.com/p/py-nonblocking-http/" target="_self">his own library</a> for this job and I think it is very good if you need some advanced http features and a very fast library.</p>
+<p>To finish the day I went to Tarek's talk bout <a href="http://us.pycon.org/2011/schedule/presentations/81/" target="_self">distutils 2</a> and I listened excited about the state of this project and how it is going to make our lifes so much easier. Distutils 2 is going to be part of Python 3.2 and you will be able to use it as a separated module starting with Python 2.4! There are only two problems to be solved: it is not finished yet (this is easy, just help him!) and it won't support all the things that setuptools does, like entry_points among other things. We will need some other library for this since there a bunch of us that uses these features. By they way, I'm the one that ask Tarek about entry_points at the end of his talk. I agree with him that they should not be part of distutils2 but that does not solves the problem. We need a full replacement!</p>
+<figure>
+  <a href="/blog/assets/IMG_20110312_165418.jpg"><img class="size-medium wp-image-327" title="Tarek Ziadé" src="/blog/assets/IMG_20110312_165418-224x300.jpg" alt="" width="224" height="300" /></a>
+  <figcaption>Tarek is the man behind distutils2</figcaption>
+</figure>
+<p>That afternoon I went to an open space to talk about the future of the Zope community. After that I got to go for dinner with the Zope guys to a nice mediterranean restaurant. I was invited by <a href="http://www.zeomega.com/" target="_self">Zeomega</a> company and I enjoyed the dinner a lot. I've been reading and following some of these guys for a long time and it was very cool to talk to them face to face. By the way, I talked with Jim Fulton about Spain since he has been there recently and he liked it a lot.</p>
+<figure>
+  <a href="/blog/assets/IMG_20110312_221052.jpg"><img class="size-medium wp-image-323" title="Zope dinner" src="/blog/assets/IMG_20110312_221052-300x225.jpg" alt="" width="300" height="225" /></a>
+  <figcaption>happiness = getMultiAdapter(zope, dinner)</figcaption>
+</figure>
+<p>Next day there were some more nice talks. One guy from <a href="http://www.threadless.com/" target="_self">Threadless</a> gave a very funny talk. Unfortunately my english is still not that good and I didn't get all the jokes. After that the people from <a href="http://disqus.com/" target="_self">Disqus</a> gave a very interesting talk about their product and how they did it using python tools: celery (for asynchronous tasks), graphite (for monitoring), sentry (for exception monitoring), coverage.py, pep8, pyflakes and may more. The only thing they didn't like about Python is the current state of packaging, which I have to agree with.</p>
+<p>After that I went to see the <a href="http://us.pycon.org/2011/schedule/presentations/154/" target="_self">co-routines</a> talk but I didn't quite understand them yet. I'll need some more reading because it looks like they are getting pretty big nowadays.</p>
+<p>To end the conference days there was the poster session. I have to admit I didn't have big expectations on this but I also have to admin that I was nicely surprised. There were lots of good posters and I discovered a bunch of really interesting projects:</p>
+<ul>
+<li><a href="http://askbot.org/en/questions/" target="_self">askbot.org</a> , a stackoverflow clone written in Python</li>
+<li><a href="http://sourceforge.net/p/allura/home/" target="_self">Allura</a> , the code behind Sourceforge</li>
+<li><a href="http://farmdev.com/projects/fudge/" target="_self">Fudge</a>, which is very cool for mock testing. For example if you need to test a software that makes http connections but you don't really want to make them for testing. It's monkey patching done right.</li>
+<li><a href="http://openstates.sunlightlabs.com/" target="_self">Open States </a>, and open goverment initiative</li>
+<li>There was a guy with a wheel chair doing some astonishing job with a kinect device. Sorry I don't remember the name of his project :-(</li>
+</ul>
+<figure>
+  <a href="/blog/assets/IMG_20110313_101058.jpg"><img class="size-medium wp-image-326" title="a11y poster" src="/blog/assets/IMG_20110313_101058-300x225.jpg" alt="" width="300" height="225" /></a>
+  <figcaption>You would not believe what this guy just did with a kinect and a lot of courage</figcaption>
+</figure>
+
+<p>By the way, PyCON does a marvelous job by recording all the talks and puting them online. So, in case you couldn't come, <a href="http://pycon.blip.tv/posts?view=archive&amp;nsfw=dc" target="_self">just watch the  talks</a> They are worthy!</p>

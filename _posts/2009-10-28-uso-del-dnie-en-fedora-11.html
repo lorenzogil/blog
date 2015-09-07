@@ -1,0 +1,99 @@
+---
+layout: post
+title: Uso del DNIe en Fedora 11
+date: 2009-10-28 14:21:56.000000000 -07:00
+categories:
+- Ordenadores
+tags:
+- dnie
+- fedora
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>Hoy he intentado usar mi DNI electrónico en mi sistema operativo Fedora 11 y me entristece decir que no ha sido fácil y una vez más quedamos relegados a este gueto que es el software libre. ¿Por qué? Muy fácil, el driver del DNI electrónico no es libre y eso hace que su distribución esté totalmente ligada a un conjunto específico de versiones muy limitado de las librerías de las que depende. Cuando trabajé en el soporte del DNIe para Guadalinex v4 ya descubrimos este problema y nos resignamos a admitir que el DNIe iba a funcionar con la Guadalinex recién instalada pero probablemente dejaría de hacerlo cuando se actualizaran ciertas librerías del sistema, algo relativamente frecuente en cualquier distribución de Linux.</p>
+<p>Parece que este problema no existe en el mundo Windows ya que las actualizaciones son mucho menos frecuentes y la gente del DNIe puede permitirse el lujo de distribuir un binario que funcionará durante al menos 3 o 4 años que es lo que suele durar una versión de este sistema operativo, frente a los 6-8 meses que duran las distribuciones de Linux. Es justo admitir que no es fácil seguir el ritmo de evolución de una distribución Linux pero también hay que recordar que este problema desaparecería si el código en cuestión fuera libre y se distribuyeran las fuentes listas para compilar con cualquier versión de las librerías implicadas.</p>
+<p>Bueno, basta de quejas y vamos a lo que interesa, a hacer que funcione.</p>
+<p>Lo primero es descargarnos los <a href="http://www.dnielectronico.es/descargas/PKCS11_para_Sistemas_Unix/opensc_1.4.6_arq_fed_10_32.html" target="_self">binarios para Fedora 10</a> que es lo más reciente que hay en la página de la policia. En este punto debemos sentirnos afortunados de ser usuarios de una de las tres distribuciones de Linux soportadas: Debian, Ubuntu y Fedora. La verdad, no sé como lo hará la gente de Gentoo, Suse, Mandriva, o Arch, por citar algunas de las más populares.</p>
+<p>Desempaquetamos el tar y obtenemos dos paquetes rpm:</p>
+<ul>
+<li>opensc-0.11.7-7.fc10.i386.rpm</li>
+<li>opensc-dnie-1.4.6-2.fc10.i386.rpm</li>
+</ul>
+<p>Al intentar instalar el primero tendremos un error de dependencias:</p>
+<pre>
+[root@ticotico ~]# rpm -Uvh --force opensc-0.11.7-7.fc10.i386.rpm
+error: Error de dependencias:
+libcrypto.so.7 se necesita para opensc-0.11.7-7.fc10.i386
+libltdl.so.3 se necesita para opensc-0.11.7-7.fc10.i386
+</pre>
+<p>Y lo que está ocurriendo aquí es que las librerías libcrypto (paquete openssl) y libtdl (paquete libtool-ltdl) instaladas en mi sistema son más recientes que esas. Ahora nos toca forzar la instalación de opensc-0.11.7 aún sabiendo que es peor que opensc 0.11.8 que es la versión que ofrece Fedora 11, ya que la <a href="http://lwn.net/Alerts/335402/" target="_self">versión 0.11.7 tiene vulnerabilidades de seguridad</a>. Los chicos del DNIe dicen que no liberan el código porque sería inseguro hacerlo así pero no actualizan su paquete haciendo que tengamos que usar librerías con fallos de seguridad. Una vez más, la seguridad por oscuridad triunfa. Un driver para atarnos a todos al reino de las sombras.</p>
+<p>No nos desviemos, tras desinstalar nuestro querido opensc-0.11.8 de Fedora 11 instalaremos la versión 0.11.7:</p>
+<pre>
+[root@ticotico ~]# yum remove opensc
+[root@ticotico ~]# rpm -Uvh --nodeps opensc-0.11.7-7.fc10.i386.rpm
+Preparando...               ########################################### [100%]
+   1:opensc                 ########################################### [100%]
+</pre>
+<p>Ahora bien, ahora tenemos que arreglar a mano el problema de las dependencias. Rezaremos para que las nuevas versiones de libcrypto y libtdll sean compatibles hacia atras. Con el comando ldd vemos si opensc tiene sus dependencias disponibles:</p>
+<pre>
+[root@ticotico ~]# ldd /usr/bin/opensc-tool
+linux-gate.so.1 =&gt;  (0x00525000)
+libopensc.so.2 =&gt; /usr/lib/libopensc.so.2 (0x00dd8000)
+libcrypto.so.7 =&gt; not found
+libopenct.so.1 =&gt; /usr/lib/libopenct.so.1 (0x00d19000)
+libz.so.1 =&gt; /lib/libz.so.1 (0x00318000)
+libltdl.so.3 =&gt; not found
+libdl.so.2 =&gt; /lib/libdl.so.2 (0x002f4000)
+libscconf.so.2 =&gt; /usr/lib/libscconf.so.2 (0x00496000)
+libpthread.so.0 =&gt; /lib/libpthread.so.0 (0x002fb000)
+libc.so.6 =&gt; /lib/libc.so.6 (0x00157000)
+/lib/ld-linux.so.2 (0x0012f000)
+libcrypto.so.7 =&gt; not found
+libltdl.so.3 =&gt; not found
+</pre>
+<p>Como era de esperar no encuentra ni libcrypto ni libtdl. Hacemos enlaces simbólicos para facilitarle la tarea:</p>
+<pre>
+[root@ticotico ~]# cd /usr/lib
+[root@ticotico lib]# ln -s libltdl.so.7 libltdl.so.3
+[root@ticotico lib]# ln -s libcrypto.so.8 libcrypto.so.7
+</pre>
+<p>Probamos otra vez con ldd:</p>
+<pre>
+[root@ticotico lib]# ldd /usr/bin/opensc-tool
+linux-gate.so.1 =&gt;  (0x009d2000)
+libopensc.so.2 =&gt; /usr/lib/libopensc.so.2 (0x00670000)
+libcrypto.so.7 =&gt; /usr/lib/libcrypto.so.7 (0x05e96000)
+libopenct.so.1 =&gt; /usr/lib/libopenct.so.1 (0x00b19000)
+libz.so.1 =&gt; /lib/libz.so.1 (0x00318000)
+libltdl.so.3 =&gt; /usr/lib/libltdl.so.3 (0x063ea000)
+libdl.so.2 =&gt; /lib/libdl.so.2 (0x002f4000)
+libscconf.so.2 =&gt; /usr/lib/libscconf.so.2 (0x00897000)
+libpthread.so.0 =&gt; /lib/libpthread.so.0 (0x002fb000)
+libc.so.6 =&gt; /lib/libc.so.6 (0x00157000)
+/lib/ld-linux.so.2 (0x0012f000)
+</pre>
+<p>Ahora ya podemos instalar el paquete del DNIe y hacerlo funcionar según las instrucciones oficiales:</p>
+<pre>
+[root@ticotico ~]# rpm -Uvh opensc-dnie-1.4.6-2.fc10.i386.rpm
+Preparando...               ########################################### [100%]
+   1:opensc-dnie            ########################################### [100%]
+</pre>
+<p>Ahora ya sólo nos queda validar el certificado en la página de pruebas: <a href="http://www.dnielectronico.es/como_utilizar_el_dnie/verificar.html" target="_self">http://www.dnielectronico.es/como_utilizar_el_dnie/verificar.html</a></p>
+<h3>Actualización 29 Octubre 2009</h3>
+<p>Después de todo el follón para tener funcionando el DNIe que tuve ayer resulta que los certificados digitales que hay dentro me han caducado desde hace 4 meses. Parece que los certificados tienen una validez de 30 meses mientras que la tarjeta en sí vale para 4 años. No me preguntéis por qué, yo tampoco lo entiendo.</p>
+<p>Así que tras haber despotricado sobre el driver del DNIe me parece justo alabar el proceso de renovación de los certificados porque aquí sí que creo que han hecho un estupendo trabajo los responsables del DNIe. He ido a la comisaría  más cercana de mi casa, en Sevilla, y aunque no estaba abierta al público aún (eran las 7:40 de la mañna) un policía bastante amable me ha preguntado que qué quería y tras explicarle lo de la renovación de los certificados del DNIe me ha dejado pasar para que lo hiciera yo mismo con un quiosco diseñado para tal fin. Una vez en el quiosco la experiencia de usuario ha sido magnífica y tras poner el dedo en el lector de huellas me ha renovado los dos certificados sin problema. Ha tardado un poco pero bueno, más vale lento pero que sea fiable y no pete. Mi satisfacción se debe por tanto a:</p>
+<ol>
+<li>Un estupendo trabajo con el quiosco tanto hardware como software.</li>
+<li>Un funcionario amable (el policia, en este caso) que me pregunta qué necesito y me permite usar un servicio aunque no haya comenzado el horario de atención al público.</li>
+<li>Una ausencia total de espera, en parte debido a la hora, pero también a que se elimina la intervención de funcionarios para esta tarea.</li>
+<li>Un ahorro para la administración pública al no necesitar de funcionarios para renovar estos certificados.</li>
+</ol>
+<h3>Actualización 26 Marzo 2010</h3>
+<p><a href="http://www.kriptopolis.org/wrapper-edni-fedora-linux" target="_self">Instrucciones para que funcione en Fedora 12</a></p>

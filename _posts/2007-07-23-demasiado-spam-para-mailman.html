@@ -1,0 +1,27 @@
+---
+layout: post
+title: Demasiado spam para Mailman
+date: 2007-07-23 14:33:30.000000000 -07:00
+categories:
+- Ordenadores
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>Esta mañana he ido a actualizar el gestor de listas de correo <a href="http://www.list.org">Mailman</a> que tenemos en <a href="http://www.sicem.biz">Sicem</a> cuando en el proceso de postinstalación Debian me dice que no se puede actualizar el Mailman porque hay mensajes pendientes de moderación.</p>
+<p>Entonces recuerdo que la última vez que intente moderar dichos mensajes no pude hacerlo con la interfaz web que mailman tiene para eso (<a href="http://localhost/mailman/admindb/lista">http://localhost/mailman/admindb/lista</a>) ya que dicha web se colgaba y nunca terminaba de generarse correctamente.</p>
+<p>Pero, ¿de cuánto spam estamos hablando? Muy fácil:</p>
+<p><code>root@linuxserver:/var/lib/mailman# du -h data/<br />
+540M     data/<br />
+</code></p>
+<p>La verdad es que es mucho tiempo sin barrer la casa y las esquinas están ya redondas de tanta basura.</p>
+<p>Afortunadamente Mailman ofrece scripts para esta tarea y podemos resolver el problema desde la linea de comandos:</p>
+<p><code>root@linuxserver:/var/lib/mailman# find data -name heldmsg-gazpacho-* -print | xargs bin/discard</code></p>
+<p>Problema resuelto :-) gracias a esta <a href="http://www.python.org/cgi-bin/faqw-mm.py?req=recent&amp;days=365250">faq</a></p>

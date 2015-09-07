@@ -1,0 +1,253 @@
+---
+layout: post
+title: An address form
+date: 2007-11-20 23:36:40.000000000 -08:00
+categories:
+- Ordenadores
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>In the Zope 3 app I'm working at we have person objects that can have a list of addresses associated to them. No rocket science so far. So I needed to create an add and an edit forms for this. Something with url like these:</p>
+<ul>
+<li>http://yourhost/app/people/john/addresses/+/@@addAddress.html</li>
+<li>http://yourhost/app/people/john/addresses/3/@@editAddress.html</li>
+</ul>
+<p>Now you wonder how an address looks like. Quite simple, let's look at its interface:</p>
+<pre>
+class IAddress(IContained):
+
+    line = zope.schema.Text(
+        title=u'Line',
+        description=u'Street type and number information',
+        required=True
+    )
+</pre>
+<pre>
+country = zope.schema.Choice(
+        title=u'Country',
+        description=u'Country',
+        vocabulary='CountriesVocabulary',
+        required=True,
+    )
+
+    state = zope.schema.Choice(
+        title=u'State',
+        description=u'State',
+        vocabulary='StatesVocabulary',
+        required=False,
+    )
+
+    postalCode = zope.schema.Choice(
+        title=u'Postal Code',
+        description=u'Postal Code and City',
+        vocabulary=u'PostalCodesVocabulary',
+        required=False,
+    )
+
+    contact = zope.schema.TextLine(
+        title=u'Contact',
+        description=u'Contact information',
+        required=False
+    )
+
+    notes = zope.schema.Text(
+        title=u'Notes',
+        description=u'Other notes',
+        required=False
+    )
+</pre>
+<p>As you can see the country, state and postal code are choices taken from different vocabularies. I have models for those objects and the structure is hierarchical: A country contains state and a state contains postal codes.</p>
+<p>I could just store the postal code inside the address since I can retrieve its state and its country just from the postal code. We decided not to do so to because of two reasons:</p>
+<ul>
+<li>To keep our queries and business logic simpler. For example, consider you want a report of all your customer living in Spain...</li>
+<li>So we could use the hierarchical relationships to aid our users in the addresses forms.</li>
+</ul>
+<p>I'll explain the second reason in more detail in this post. What I wanted to accomplish was something like what you see in this small screencast:</p>
+<p><img src="assets/addres-form-screncast.gif" alt="addres-form-screncast.gif" /></p>
+<p>As you see, the user first select the country in the first dropdown list, this will fill the state dropdown list with all the states belonging to that country. Similarily, when the user chooses a state the postal codes<br />
+dropdown list will be filtered.</p>
+<p>I started implementing this with the wrong approach which I will also describe here for the record.</p>
+<h3>Wrong approach</h3>
+<p>In Zope 3 a choice field gets it list of possible values from something called a vocabulary (or more recently, a source). This can be anything that returns a list of terms. In our case the country vocabulary will<br />
+get the list of country objects from the database. I have a countries folder registered with an ICountries interface so the task of getting the list of country objects is quite easy:</p>
+<pre>
+class CountriesVocabulary(SimpleVocabulary):
+    zope.interface.classProvides(IVocabularyFactory)
+
+    def __init__(self, context):
+        terms = []
+        for name, countries in zope.component.getUtilitiesFor(ICountries):
+            terms += [SimpleTerm(country, country.__name__, country.name)
+                      for country in countries.values()]
+        super(CountriesVocabulary, self).__init__(terms)
+</pre>
+<p>Building the states and postal codes vocabularies is a little more difficult since they depend on a context. This mean that the states vocabulary will depend on a specific country and the postal codes vocabulary will depend on a specific state. But the context won't be the country neither the state in this two cases but the address object since the vocabularies are used in fields of the IAddress interface. Using this idea I coded these vocabularies:</p>
+<pre>
+class StatesVocabulary(SimpleVocabulary):
+    zope.interface.classProvides(IVocabularyFactory)
+
+    def __init__(self, context):
+        terms = []
+        if IAddress.providedBy(context):
+            country = IAddress(context).country
+            if country:
+                terms = [SimpleTerm(state, state.__name__, state.name)
+                         for state in country.values()]
+
+        super(StatesVocabulary, self).__init__(terms)
+
+class PostalCodesVocabulary(SimpleVocabulary):
+    zope.interface.classProvides(IVocabularyFactory)
+
+    def __init__(self, context):
+        terms = []
+        if IAddress.providedBy(context):
+            state = IAddress(context).state
+            if state:
+                terms = [SimpleTerm(pc,
+                                    pc.__name__,
+                                    u'%s - %s' % (pc.code, pc.city))
+                         for pc in state.values()]
+        super(PostalCodesVocabulary, self).__init__(terms)
+</pre>
+<p>So far so good but here is my problem: when you create or edit an address object you need to hit the save button three times to store the country, state and postal code. Why is this? Let's try to reproduce these three steps:</p>
+<ol>
+<li>Step 1: You select a country and save the address</li>
+<li>Step 2: Now the states vocabulary will be filled with the list of states for the country you choosed in step 1</li>
+<li>Step 3: Finally you can choose a postal code from the postal codes of the state you choosed in step 2.</li>
+</ol>
+<p>Note that until you saved the country the vocabulary for states won't have that information and thus, will return an empty term list. Same thing happens with the postal codes.</p>
+<p>Even if you can get the proper information using AJAX in the form and fill the dropdown lists with the right information you won't be able to save the address object since the vocabularies are also used for validation<br />
+purposes.</p>
+<p>No need to say this was a pain in the ass and kepts my brain busy for a few days until I found the right solution.</p>
+<h3>Right approach</h3>
+<p>The lesson learned from the previous approach was that something was wrong with dictionaries which depended on a context in such a strict way. In the IAddress interface I should keep the fields simple enough to let the form set <em>any</em> state on the state field and <em>any</em> postal code in the postal code<br />
+field. As I still want some integrity in my data it's time to delegate that to an invariant. In other words, I will any value of the right type into the state and postal code attributes and after that I will validate these<br />
+fields with an invariant that will make sure the state is inside the country and the postal code is inside the state. An invariant like this:</p>
+<pre>
+def postalCodeInsideStateInsideCountry(address):
+    country = address.country
+    state = address.state
+    postalCode = address.postalCode
+    if country is not None and state is not None:
+        if state not in country.values():
+            st = state.name or state.__name__
+            co = country.name or country.__name__
+            raise zope.schema.ValidationError(
+                u"The state %s does not belongs to country %s" % (st, co)
+                )
+
+        if postalCode is not None:
+            if postalCode not in state.values():
+                pc = postalCode.code or postalCode.__name__
+                st = state.name or state.__name__
+                raise zope.schema.ValidationError(
+                    u"The postal code %s does not belongs to state %s" % (pc, st)
+                )
+</pre>
+<p>Then I just add this declaration inside the IAddress interface:</p>
+<pre>
+class IAddress(IContained):
+    ...
+
+    zope.interface.invariant(postalCodeInsideStateInsideCountry)
+</pre>
+<p>Next I'll have to rewrite my vocabularies to be context-free and return the full list of objects in each case:</p>
+<pre>
+class PostalCodesVocabulary(SimpleVocabulary):
+    zope.interface.classProvides(IVocabularyFactory)
+
+    def __init__(self, context):
+        terms = []
+        for name, countries in zope.component.getUtilitiesFor(ICountries):
+            for country in countries.values():
+                for state in country.values():
+                    prefix = country.__name__ + '/' + state.__name__ + '/'
+                    terms += [SimpleTerm(RSP(pc),
+                                         prefix + pc.__name__,
+                                         u'%s - %s' % (pc.code, pc.city))
+                              for pc in state.values()]
+
+        super(PostalCodesVocabulary, self).__init__(terms)
+
+class StatesVocabulary(SimpleVocabulary):
+    zope.interface.classProvides(IVocabularyFactory)
+
+    def __init__(self, context):
+        terms = []
+        for name, countries in zope.component.getUtilitiesFor(ICountries):
+            for country in countries.values():
+                terms += [SimpleTerm(RSP(state),
+                                     country.__name__ + '/' + state.__name__,
+                                     state.name)
+                          for state in country.values()]
+
+        super(StatesVocabulary, self).__init__(terms)
+</pre>
+<p>You may note that the token of each term has a prefix now. This is because the token should be unique inside that vocabulary. I'm using the country code and the state code with a slash separating them because I will use<br />
+this token later in javascript.</p>
+<p>This fixed my problem as now I'm able to create an address object with just a save button hit without losing data integrity but I still have one more problem: my forms list all states and postal codes no matter which<br />
+country is selected in the case of states and what state is selected in the case of postal codes. Seems like all these efforts didn't help me to accomplish what I initially wanted.</p>
+<p>It's time for some javascript to make things truly dynamic.</p>
+<h3>Adding javascript for a richer user experience</h3>
+<p>My solution was to add a small jQuery script and a couple of related views to fill the dropdown lists every time the user changes them. This mean that if the user selects a country, an ajax request will be made to retrieve the list of states for that country and will populate the state select tag with those options. Similar behaviour happens when the user changes the state.</p>
+<p>Let's see the jQuery code:</p>
+<pre>
+(function($){
+
+$(document).ready(function () {
+
+    function fillSelect(data) {
+        var options = $.map(data, function (obj, index) {
+            return '&lt;option value="' + obj.id + '"&gt;' + obj.name + '&lt;/option&gt;';
+        });
+        return '&lt;option value=""&gt;(no value)&lt;/option&gt;n' + options.join("n");
+    }
+
+    $("select#form.country").change(function () {
+        var value = $(this).val();
+        if (value) {
+            var currentState = $("select#form.state").val();
+            var url = '../../Countries/' + value + '/@@states.json';
+            $.getJSON(url, function (data) {
+                $("select#form.state")
+                  .html(fillSelect(data))
+                  .val(currentState)
+                  .change();
+            });
+        } else {
+            $("select#form.state").html(fillSelect([])).change();
+        }
+    });
+
+    $("select#form.state").change(function () {
+        var value = $(this).val();
+        if (value) {
+            var currentPostalCode = $("select#form.postalCode").val();
+            var url = '../../Countries/' + value + '/@@postalCodes.json';
+            $.getJSON(url, function (data) {
+                $("select#form.postalCode")
+                  .html(fillSelect(data))
+                  .val(currentPostalCode);
+            });
+        } else {
+            $("select#form.postalCode").html(fillSelect([]));
+        }
+    });
+
+    /* initialize combos */
+    $("select#form.country").change();
+});
+
+})(jQuery);
+</pre>
+<h3>Final thoughts</h3>
+<p>The last bit of love that this form need is some support for adding countries/states/postalCodes when the user is filling an address and that information is not yet in the database. It shouldn't be too hard to add some javascript buttons that ask the user for that and post it to the server. Then update the selects and let the user choose the new created object.</p>

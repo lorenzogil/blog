@@ -1,0 +1,124 @@
+---
+layout: post
+title: 'Zope3 for Djangoers. Part 2: Writing your models'
+date: 2007-09-12 00:02:23.000000000 -07:00
+categories:
+- Ordenadores
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>Yesterday <a href="/blog/2007/09/10/zope3-for-djangoers-part-1-installation/">I wrote an (introduction) article</a> about how to start developing webapps with <a href="http://wiki.zope.org/zope3/Zope3Wiki">Zope</a> coming with a <a href="http://www.djangoproject.com/">Django</a> background. We got to the point where a development environment for both frameworks was ready to start coding. It's time to get our hands dirty.</p>
+<p>As any modern web framework, both Django and Zope are based on a more or less formal variant of the <a href="http://en.wikipedia.org/wiki/Model-view-controller">MVC</a> pattern. Usually in this pattern you start writing your models. You do this in Django creating a models.py file inside your app and writing classes that inherit from django.db.models.Model. For example if you are modeling a multimedia library application you will probably have the following models:</p>
+<pre>
+from django.db.import models
+
+class Record(models.Model):
+    artist = models.CharField('Artist', maxlength=80)
+    title = models.CharField('Title', maxlength=150)
+    length = models.PositiveIntField('Length', blank=True)
+    date = models.DateField('Date', blank=True)
+
+class Song(models.Model):
+    title = models.CharField('Title', maxlength=150)
+    length = models.PositiveIntField('Length', blank=True)
+    record = models.ForeignKey(Record)
+
+class Movie(models.Model):
+    title = models.CharField('Title', maxlength=150)
+    director = models.CharField('Director', maxlength=80, blank=True
+    date = models.DateField('Date', blank=True)
+    length = models.PositiveIntField('Length', blank=True)
+</pre>
+<p>Ok, that's enough to have a semi-realistic example. Let's see how to do the same with your Zope3 app. As pretty much everything else in Zope3 a model is a component, made up by an interface and an implementation. The interface says how the model looks like and what kind of things you allow others on your data. The implementation is an example of something that support your interface. You write your interfaces in a interfaces.py file and the implementation in another file or files. Note that the name of the file 'interfaces.py' is just a convention. The 'models.py' file in you Django app need to be called that way. Not a big deal though. Let's write our interfaces.py file:</p>
+<pre>
+import zope.app.container.constraints
+import zope.app.container.interfaces
+import zope.schema
+
+class IRecord(zope.app.container.interfaces.IContainer):
+    artist = zope.schema.TextLine(title=u'Artist', description=u'Author of the record')
+    title = zope.schema.TextLine(title=u'Title', description=u'Title')
+    length = zope.schema.Int(title=u'Length', description=u'Length in seconds', min=0, required=False)
+    date = zope.schema.Date(title=u'Date', description=u'Release date', required=False)
+
+    contains('.ISong')
+
+    def length_in_minutes():
+        """Return a pretty string with the length in the mm:ss format"""
+
+class ISong(zope.app.container.interfaces.IContained):
+    title = zope.schema.TextLine(title=u'Title', description=u'Title')
+    length = zope.schema.Int(title=u'Length', description=u'Length in seconds', min=0, required=False)
+
+    containers(IRecord)
+
+    def length_in_minutes():
+        """Return a pretty string with the length in the mm:ss format"""
+
+class IMovie(zope.app.container.interfaces.IContained):
+    title = zope.schema.TextLine(title=u'Title', description=u'Title')
+    director = zope.schema.TextLine(title=u'Director', description=u'Director', required=False)
+    date = zope.schema.TextLine(title=u'Date', description=u'Release date', required=False)
+    length = zope.schema.Int(title=u'Length', description=u'Length in minutes', min=0, required=False)
+</pre>
+<p>Now, time for some comments. Even that our Django models.py and our Zope3 interfaces.py have a lot of things in common as they are defining our models they have some important differences:</p>
+<ul>
+<li>The classes in interfaces.py are not classes but interfaces. In Python there is no support for interfaces (as there is in Java) so we use the 'class' word but they are not clases. You can see they are not classes as the methods we defined doesn't have the 'self' or 'cls' arguments.</li>
+<li>In Zope3 every string you put in your code must be unicode. Looks like a drawback but believe me, it will make your life much easier later on.</li>
+<li>Both in Django and Zope3 a field is mandatory by default. If you want to make a field optional you use the blank=True or required=False argument respectively. I prefer the wording of Zope3 much more.</li>
+<li>In Django you have a ORM that finally use a Relational Database (hint: ForeignKey field is no surprise here). In Zope3 you use an object oriented database (<a href="http://wiki.zope.org/ZODB/FrontPage">ZODB</a>). To represent the 1:n relationship between Records and Songs you justs say a Record is a container for Songs. This is much more intuitive and easier to model with an object oriented database. Having said that I must tell you can use a relational database with Zope3. We will do that in following articles.</li>
+<li>The 'I' prefix for our interfaces is a common convention to remind you they are interfaces, not classes.</li>
+</ul>
+<p>We still need to implement our interfaces in Zope3 so we'll write a file called multimedia.py where we can put the implementations. Usually I use several files, one implementation in each one but we'll put everything in the same file for the sake of simplicity:</p>
+<pre>
+import persistent
+import zope.interfacefrom zope.app.container.btree import BTreeContainer
+from zope.app.container.contained import Contained
+
+import myapp.interfaces
+
+class Record(BTreeContainer):
+    zope.interface.implements(myapp.interfaces.IRecord)
+    def __init__(self, artist, title, length=None, date=None):
+        super(Record, self).__init__()
+        self.artist, self.title, self.length, self.date = artist, title, length, date
+
+class Song(Contained, persistent.Persistent):
+    zope.interface.implements(myapp.interfaces.ISong)
+    def __init__(self, title, length=None):
+        super(Song, self).__init__()
+        self.title, self.length = title, length
+
+class Movie(Contained, persistent.Persistent):
+    zope.interface.implements(myapp.interfaces.IMovie)
+    def __init__(self, title, director=None, date=None, length=None):
+        super(Song, self).__init__()
+        self.title, self.director, self.date, self.length = title, director, date, length
+</pre>
+<p>Ok, that's it. Not as scary as you thought thanks to the existence of a lot of useful base classes we can use. We use BTreeContainer and Contained to make our models aware of the relationship between Records and Songs. We also use Persistent to allow our objects to persist in the ZODB. We could use <a href="http://www.sqlalchemy.org/">SQLAlchemy</a>, <a href="https://storm.canonical.com/">Storm</a> or even Django ORM here if we wanted to persist our objects in a Relational Database.</p>
+<p>Now we must hook the models into the main app. We do this in Django with a two steps process:</p>
+<ol>
+<li>Include our application in the settings.py file, in the INSTALLED_APPS tuple</li>
+<li>Run the manage.py script with the syncdb argument. This will create a bunch of tables in our database backend. If you also installed the django.contrib.auth, here this command will ask you for a admin username and password. Something Zope3 did the first time the server was run.</li>
+</ol>
+<p>In Zope3 we need to register the interfaces. In the next article, we'll also write some security declarations to our implementations. The database is not affected until we create objects. So we open the configure.zcml file in the root of our application source directory and add this lines:</p>
+<pre>
+&lt;interface interface=".interfaces.IRecord"
+    type="zope.app.content.interfaces.IContentType" /&gt;
+&lt;interface interface=".interfaces.ISong"
+    type="zope.app.content.interfaces.IContentType" /&gt;
+&lt;interface interface=".interfaces.IMovie"
+    type="zope.app.content.interfaces.IContentType" /&gt;
+</pre>
+<p>What we are doing is fill some records for the Zope3 component registry, which is a small database of components that is kept globaly in memory but can be overriden with values in the ZODB database. Remember, it's all about the component architecture: that's what gives you real power. But every great power comes with great responsability and here the responsability is to correctly fill the configure.zcml file. I hear you little boy crying and winning about that ugly XML file. As we will see later, having a registry of components and the relationships between them allows you to do pretty amazing things.</p>
+<p>So I'd say this is the first really important (and probably biggest) difference between Django and Zope3: the component architecture. Love it or hate it, that's one thing that Django lacks. Before you complaint about this let met tell you a little history: I onced had to explain Django to a <a href="http://www.php.net">PHP</a> experienced developer. As many PHP developers he used to write the &lt;?php &gt; tag scattered in his html files. No templates, no models, no views. Controller? what's that?. I tried to explain him that using the MVC pattern was a good thing that will help him to design and maintain his applications. He was not sure that this extra learn effort was worthy. I ask the Django developer the same question: is the Component Architecture twist of mind worthy for you?</p>
+<p>The answer will depend on your project. As a rule of thumb all I can say is: the more complex your project is the more value you will get from the CA. Every time I hear Zope3 is too hard, it has a very sloppy learning curve, etc, etc. I can't say that's not true. That is indeed true for every software project with a component architecture: think about Mozilla XUL, Microsoft COM or OpenOffice.org UNO. Zope3 looks easy next to them :-)</p>
+<p>See you in the next article, where we will see how to render pixel on the screen: the exciting part!</p>

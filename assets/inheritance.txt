@@ -1,0 +1,185 @@
+Mapping inheritance to a RDBMS with storm and lazr.delegates
+************************************************************
+
+When using a ORM one of the most common problems is how to map your beautiful
+application class inheritance to the database. The specific scenario I'm going
+to describe is when you have an abstract base class with some fields and you
+want to store those fields in a database table. Then all of its subclasses will
+have their own table and to get the data of an instance you will need to make
+a join between the base table and the subclass table.
+
+One pattern to accomplish this is the infoheritance pattern described in the
+Storm documentation. I'll show you here a slightly modified version of this
+pattern that uses the package lazr.delegates to make the user code easier by
+hiding the fact that we are using composition to model inheritance.
+
+So let's start with some interface definition showing our model hierarchy:
+
+    >>> from zope.interface import Interface, Attribute
+
+    >>> class IPerson(Interface):
+    ...     name = Attribute("Name")
+    ...
+    >>> class ISecretAgent(IPerson):
+    ...     passcode = Attribute("Passcode")
+    ...
+    >>> class ITeacher(IPerson):
+    ...     school = Attribute("School")
+
+
+No rocket science so far. Let's write now the implementation of the
+IPerson interface. This will be our abstract base class. Pay special
+attention to the person property which dynamically retrieve the subclass
+instance by using composition.
+
+    >>> from zope.interface import implements
+    >>> from zope.interface.verify import verifyClass
+    >>> from lazr.delegates import delegates
+    >>> from storm.locals import Store, Storm, Unicode, Int, Reference
+
+    >>> class Person(Storm):
+    ...     implements(IPerson)
+    ...
+    ...     __storm_table__ = "person"
+    ...
+    ...     id = Int(allow_none=False, primary=True)
+    ...     name = Unicode()
+    ...     person_type = Int(allow_none=False)
+    ...     _person = None
+    ...
+    ...     def __init__(self, store, name, person_class, **kwargs):
+    ...         self.name = name
+    ...         self.person_type = person_class.person_type
+    ...         store.add(self)
+    ...         self._person = person_class(self, **kwargs)
+    ...
+    ...     @property
+    ...     def person(self):
+    ...         if self._person is None:
+    ...             assert self.id is not None
+    ...             person_class = BasePerson.get_class(self.person_type)
+    ...             self._person = Store.of(self).get(person_class, self.id)
+    ...         return self._person
+
+    >>> verifyClass(IPerson, Person)
+    True
+
+We will also use a custom metaclass (based on Storm metaclass) so it will
+automatically register our subclasses. This is necessary for the dynamic
+person property of the Person class where we map integer (stored in the
+database) to classes (stored in the source code).
+
+    >>> from storm.properties import PropertyPublisherMeta
+    >>> class PersonType(PropertyPublisherMeta):
+    ...     def __init__(self, name, bases, dict):
+    ...         super(PersonType, self).__init__(name, bases, dict)
+    ...         if not hasattr(self, '_person_types_registry'):
+    ...             self._person_types_registry = {}
+    ...         elif hasattr(self, '__storm_table__'):
+    ...             key = len(self._person_types_registry)
+    ...             self._person_types_registry[key] = self
+    ...             self.person_type = key
+    ...
+    ...     def get_class(self, person_type):
+    ...         return self._person_types_registry[person_type]
+
+Now we define a convenience base class for our subclasses. Remember that
+the subclasses don't really inherit from the Person class  because we
+are using composition. This is where the lazr.delegates.delegates function
+comes to rescue. By saying that we delegate the implementation of the
+IPerson interface to the 'person' attribute, the instances of these subclasses
+will look like they really are subclasses of Person, not just from BasePerson.
+
+    >>> class BasePerson(Storm):
+    ...     __metaclass__ = PersonType
+    ...     delegates(IPerson, "person")
+    ...
+    ...     person_id = Int(allow_none=False, primary=True)
+    ...     person = Reference(person_id, "Person.id")
+    ...
+    ...     def __init__(self, person):
+    ...         self.person = person
+
+    >>> class SecretAgent(BasePerson):
+    ...     implements(ISecretAgent)
+    ...
+    ...     __storm_table__ = "secret_agent"
+    ...     passcode = Unicode()
+    ...
+    ...     def __init__(self, person, passcode=None):
+    ...         super(SecretAgent, self).__init__(person)
+    ...         self.passcode = passcode
+
+Here is the magic: we have an interface hierarchy and a different
+hierarchy for the classes implementing them. But it's all transparent
+and our classes implement the full hierarchy:
+
+    >>> verifyClass(ISecretAgent, SecretAgent)
+    True
+
+    >>> class Teacher(BasePerson):
+    ...     implements(ITeacher)
+    ...
+    ...     __storm_table__ = "teacher"
+    ...     school = Unicode()
+    ...
+    ...     def __init__(self, person, school=None):
+    ...         super(Teacher, self).__init__(person)
+    ...         self.school = school
+
+    >>> verifyClass(ITeacher, Teacher)
+    True
+
+Now let's try storing the objects in the database. We will use a
+sqlite in memory database for this example.
+
+    >>> from storm.locals import create_database
+    >>> database = create_database("sqlite:")
+    >>> store = Store(database)
+    >>> result = store.execute("""
+    ...     CREATE TABLE person (
+    ...         id INTEGER PRIMARY KEY,
+    ...         person_type INTEGER NOT NULL,
+    ...         name TEXT NOT NULL)
+    ... """)
+    >>> result = store.execute("""
+    ...     CREATE TABLE secret_agent (
+    ...         person_id INTEGER PRIMARY KEY,
+    ...         passcode TEXT)
+    ... """)
+    >>> result = store.execute("""
+    ...     CREATE TABLE teacher (
+    ...         person_id INTEGER PRIMARY KEY,
+    ...         school TEXT)
+    ... """)
+
+    >>> secret_agent = Person(store, u"James Bond",
+    ...                        SecretAgent, passcode=u"007")
+    >>> ISecretAgent.providedBy(secret_agent.person)
+    True
+    >>> teacher = Person(store, u"Albus Dumbledore",
+    ...                  Teacher, school=u"Hogwarts")
+    >>> ITeacher.providedBy(teacher.person)
+    True
+    >>> store.commit()
+
+The objects are now saved in the database. Let's destroy them and
+retrieve them back using some queries:
+
+    >>> del secret_agent
+    >>> del teacher
+    >>> store.rollback()
+
+    >>> secret_agent = store.find(SecretAgent).one()
+    >>> secret_agent.name, secret_agent.passcode    
+    (u'James Bond', u'007')
+    >>> teacher = store.find(Teacher).one()
+    >>> teacher.name, teacher.school
+    (u'Albus Dumbledore', u'Hogwarts')
+
+The great thing is that we can write teacher.name without having to
+write teacher.person.name (which also works by the way) effectively
+hiding the implementation detail of composition.
+
+Just one final note: Bear in mind that you should not have very deep
+hierarchies or you may get a lot of JOINs and a slow application.

@@ -1,0 +1,173 @@
+---
+layout: post
+title: Mapping inheritance to a RDBMS with storm. Proxy version
+date: 2009-01-23 00:39:16.000000000 -08:00
+categories:
+- Ordenadores
+tags:
+- zope
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>One problem that we had in the <a href="/blog/ordenadores/2009/01/18/mapping-inheritance-to-a-rdbms-with-storm-and-lazrdelegates.html" target="_self">first version</a> of our inheritance by composition pattern was that we could not make storm queries using the subclasses. In other words, the following would return None::</p>
+<pre>
+secret_agent = store.find(SecretAgent, SecretAgent.name==u'James Bond').one()
+</pre>
+<p>The reason is that the expresion SecretAgent.name would resolve to a Passthrough lazr.delegates object that Storm does not know how to handle.</p>
+<p>This time we will try to fix this problem using a manually generated version of our classes using storm's Proxy objects.</p>
+<p>The interface definitions do not change:</p>
+<pre>
+&gt;&gt;&gt; from zope.interface import Interface, Attribute
+&gt;&gt;&gt; class IPerson(Interface):
+...     name = Attribute("Name")
+...
+&gt;&gt;&gt; class ISecretAgent(IPerson):
+...     passcode = Attribute("Passcode")
+...
+&gt;&gt;&gt; class ITeacher(IPerson):
+...     school = Attribute("School")
+</pre>
+<p>Neither the Person class:</p>
+<pre>
+&gt;&gt;&gt; from zope.interface import implements
+&gt;&gt;&gt; from zope.interface.verify import verifyClass
+&gt;&gt;&gt; from lazr.delegates import delegates
+&gt;&gt;&gt; from storm.locals import Store, Storm, Unicode, Int, Proxy, Reference
+&gt;&gt;&gt; class Person(Storm):
+...     implements(IPerson)
+...
+...     __storm_table__ = "person"
+...
+...     id = Int(allow_none=False, primary=True)
+...     name = Unicode()
+...     person_type = Int(allow_none=False)
+...     _person = None
+...
+...     def __init__(self, store, name, person_class, **kwargs):
+...         self.name = name
+...         self.person_type = person_class.person_type
+...         store.add(self)
+...         self._person = person_class(self, **kwargs)
+...
+...     @property
+...     def person(self):
+...         if self._person is None:
+...             assert self.id is not None
+...             person_class = BasePerson.get_class(self.person_type)
+...             self._person = Store.of(self).get(person_class, self.id)
+...         return self._person
+&gt;&gt;&gt; verifyClass(IPerson, Person)
+True
+</pre>
+<p>Neither our custom metaclass:</p>
+<pre>
+&gt;&gt;&gt; from storm.properties import PropertyPublisherMeta
+&gt;&gt;&gt; class PersonType(PropertyPublisherMeta):
+...     def __init__(self, name, bases, dict):
+...         super(PersonType, self).__init__(name, bases, dict)
+...         if not hasattr(self, '_person_types_registry'):
+...             self._person_types_registry = {}
+...         elif hasattr(self, '__storm_table__'):
+...             key = len(self._person_types_registry)
+...             self._person_types_registry[key] = self
+...             self.person_type = key
+...
+...     def get_class(self, person_type):
+...         return self._person_types_registry[person_type]
+</pre>
+<p>Here start the changes. Our BasePerson class does not have the delegates call and does not define the person_id attribute and person reference.</p>
+<pre>
+&gt;&gt;&gt; class BasePerson(Storm):
+...     __metaclass__ = PersonType
+...
+...     def __init__(self, person):
+...         self.person = person
+</pre>
+<p>Instead we define the person_id and person reference in each subclass and also we define each attribute of the Person base class as a proxy to the related attribute of the person reference.</p>
+<pre>
+&gt;&gt;&gt; class SecretAgent(BasePerson):
+...     implements(ISecretAgent)
+...
+...     __storm_table__ = "secret_agent"
+...     passcode = Unicode()
+...     person_id = Int(allow_none=False, primary=True)
+...     person = Reference(person_id, Person.id)
+...     name = Proxy(person, Person.name)
+...
+...     def __init__(self, person, passcode=None):
+...         super(SecretAgent, self).__init__(person)
+...         self.passcode = passcode
+&gt;&gt;&gt; verifyClass(ISecretAgent, SecretAgent)
+True
+</pre>
+<p>We do it again for the Teacher class:</p>
+<pre>
+&gt;&gt;&gt; class Teacher(BasePerson):
+...     implements(ITeacher)
+...
+...     __storm_table__ = "teacher"
+...     school = Unicode()
+...     person_id = Int(allow_none=False, primary=True)
+...     person = Reference(person_id, Person.id)
+...     name = Proxy(person, Person.name)
+...
+...     def __init__(self, person, school=None):
+...         super(Teacher, self).__init__(person)
+...         self.school = school
+&gt;&gt;&gt; verifyClass(ITeacher, Teacher)
+True
+</pre>
+<p>Time to test the database storage:</p>
+<pre>
+&gt;&gt;&gt; from storm.locals import create_database
+&gt;&gt;&gt; database = create_database("sqlite:")
+&gt;&gt;&gt; store = Store(database)
+&gt;&gt;&gt; result = store.execute("""
+...     CREATE TABLE person (
+...         id INTEGER PRIMARY KEY,
+...         person_type INTEGER NOT NULL,
+...         name TEXT NOT NULL)
+... """)
+&gt;&gt;&gt; result = store.execute("""
+...     CREATE TABLE secret_agent (
+...         person_id INTEGER PRIMARY KEY,
+...         passcode TEXT)
+... """)
+&gt;&gt;&gt; result = store.execute("""
+...     CREATE TABLE teacher (
+...         person_id INTEGER PRIMARY KEY,
+...         school TEXT)
+... """)
+&gt;&gt;&gt; secret_agent = Person(store, u"James Bond",
+...                        SecretAgent, passcode=u"007")
+&gt;&gt;&gt; ISecretAgent.providedBy(secret_agent.person)
+True
+&gt;&gt;&gt; teacher = Person(store, u"Albus Dumbledore",
+...                  Teacher, school=u"Hogwarts")
+&gt;&gt;&gt; ITeacher.providedBy(teacher.person)
+True
+&gt;&gt;&gt; store.commit()
+</pre>
+<p>And what's more important, all this changes should make possible to do the query with the subclass:</p>
+<pre>
+&gt;&gt;&gt; del secret_agent
+&gt;&gt;&gt; del teacher
+&gt;&gt;&gt; store.rollback()
+&gt;&gt;&gt; secret_agent = store.find(SecretAgent).one()
+&gt;&gt;&gt; secret_agent.name, secret_agent.passcode
+(u'James Bond', u'007')
+&gt;&gt;&gt; teacher = store.find(Teacher).one()
+&gt;&gt;&gt; teacher.name, teacher.school
+(u'Albus Dumbledore', u'Hogwarts')
+&gt;&gt; secret_agent = store.find(SecretAgent, SecretAgent.name==u'James Bond').one()
+&gt;&gt;&gt; secret_agent.passcode
+u'007'
+</pre>
+<p>We have improved the power of the pattern but now it is much more verbose to write each subclass since we need to repeat a lot of things. Note that we can not move the definition of the person_id and person attributes to the BasePerson aux class because Storm will tell us that it lacks the __storm_table__ attribute. In other words: storm does not allow attributes in abstract classes.</p>

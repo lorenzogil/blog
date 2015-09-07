@@ -1,0 +1,89 @@
+---
+layout: post
+title: I like Unix
+date: 2007-12-03 21:57:51.000000000 -08:00
+categories: []
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>Last friday started as any other friday. I went to the office, plugged in my laptop and logged into my Fedora 7 system. Open a shell, setup a couple of environment variables, launch postgresql and start programming in Django. What a wonderful job, isn't it?</p>
+<p>Well, it is until you get errors like this:</p>
+<pre>
+[lgs@portatil-lgs saludinnova]$ python manage.py runserver
+Validating models...
+0 errors found
+Django version 0.97-pre-SVN-6670, using settings 'saludinnova.settings'
+Development server is running at http://127.0.0.1:8000/
+Quit the server with CONTROL-C.
+Error: That port is already in use.
+</pre>
+<p>Wait, I run the exact same command yesterday at the end of my job day and it actually worked! I immediately thought about a virus since I swear I didn't change the system in any way. Or maybe I did...</p>
+<p>So first, I needed to know which program was using the Django sacred port: 8000. Of course I can run Django development server in another port. But that's not the point. And it's not fun!</p>
+<p>But first let's make sure something is listening in port 8000:</p>
+<pre>
+[root@portatil-lgs ~]# nmap -sT -O localhost
+Starting Nmap 4.20 ( http://insecure.org ) at 2007-11-30 10:39 CET
+Interesting ports on portatil-lgs (127.0.0.1):
+Not shown: 1691 closed ports
+PORT     STATE SERVICE
+22/tcp   open  ssh
+25/tcp   open  smtp
+111/tcp  open  rpcbind
+631/tcp  open  ipp
+5432/tcp open  postgres
+8000/tcp open  http-alt
+Device type: general purpose
+Running: Linux 2.6.X
+OS details: Linux 2.6.17.8 SMP (x86)
+Uptime: 0.080 days (since Fri Nov 30 08:43:31 2007)
+Network Distance: 0 hops
+</pre>
+<p>Right, http-alt, what's that?</p>
+<pre>
+[root@portatil-lgs ~]# ps aux | grep http-alt
+root      6045  0.0  0.0   4032   752 pts/0    S+   10:40   0:00 grep http-alt
+</pre>
+No process is called http-alt. No big surprise since it looks like a standard name not binded to a real application. Let's check the well known services:</p>
+<pre>
+[root@portatil-lgs ~]# cat /etc/services | grep 8000
+irdmi           8000/tcp                        # iRDMI
+irdmi           8000/udp                        # iRDMI
+mtl8000-matrix  8115/tcp                        # MTL8000 Matrix
+mtl8000-matrix  8115/udp                        # MTL8000 Matrix
+biimenu         18000/tcp                       # Beckman Instruments, Inc.
+biimenu         18000/udp                       # Beckman Instruments, Inc.
+nxlmd           28000/tcp                       # NX License Manager
+nxlmd           28000/udp                       # NX License Manager
+nimcontroller   48000/tcp                       # Nimbus Controller
+nimcontroller   48000/udp                       # Nimbus Controller
+</pre>
+<p>Still no clue of what's going on. Let's try netstat:</p>
+<pre>
+[root@portatil-lgs ~]# netstat -anp | grep 8000
+tcp        0      0 127.0.0.1:8000              0.0.0.0:*                   LISTEN      2333/nasd
+</pre>
+Aha! I got you nasd daemon! Whatever you are.</p>
+<pre>[root@portatil-lgs ~]# which nasd
+/usr/bin/nasd
+[root@portatil-lgs ~]# rpm -qf /usr/bin/nasd
+nas-1.9.1-2.fc7
+[root@portatil-lgs ~]# yum remove nas
+Dependencies Resolved
+=============================================================================
+Package                 Arch       Version          Repository        Size
+=============================================================================
+Removing:
+nas                     i386       1.9.1-2.fc7      installed         1.3 M
+Removing for dependencies:
+qt4-x11                 i386       4.3.2-4.fc7      installed          16 M
+skype                   i586       1.4.0.118-fc5    installed          15 M
+</pre>
+<p>Finally I see the guilty program: it was Skype (well, one of its dependencies, a sound server), which I installed on thursday night to speak with my sister, who lives in Slovaquia. So it looks like I actually changed my system but I really couldn't think about this kind of side effects. Fortunately my box is full of tools to help my damaged brain repair this tiny little problems :-)</p>

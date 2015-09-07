@@ -1,0 +1,53 @@
+---
+layout: post
+title: No space left is not a problem anymore
+date: 2010-05-11 18:49:43.000000000 -07:00
+categories:
+- Ordenadores
+tags:
+- lvm
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>Today I was working with virtual machines and when I tried to install some packages the 2 GB hard disk I configured for this virtual machine reached its limit. By the way, it's pretty amazing a vanilla CentOS 5.4 installation needs almost 2 GB.</p>
+<p>Anyway, this is what I did to increase the hard disk space without reinstalling the whole thing:</p>
+<ol>
+<li> Create a new hard disk with Virtual Machine Manager. I created it with another 2 GB and selected VirtIO as the disk type.</li>
+<li>Start the virtual machine and create a partition in the new disk. /dev/vdb1 is the new disk:
+<pre>
+   Device Boot      Start         End      Blocks   Id  System
+/dev/vdb1               1        4063     2047720+  83  Linux
+</pre>
+</li>
+<li>Initialize a physical volume on the new disk:
+<pre>pvcreate /dev/vdb1</pre>
+</li>
+<li>Add this physical volume to the logical volume group:
+<pre>vgextend VolGroup00 /dev/vdb1</pre>
+</li>
+<li>Extend the logical volume group:
+<pre>
+lvextend /dev/VolGroup00/LogVol00 -L+1.9G
+Rounding up size to full physical extent 1.91 GB
+Extending logical volume LogVol00 to 3.84 GB
+Logical volume LogVol00 successfully resized
+</pre>
+</li>
+<li>Resize the filesystem:
+<pre>
+resize2fs /dev/VolGroup00/LogVol00
+resize2fs 1.39 (29-May-2006)
+Filesystem at /dev/VolGroup00/LogVol00 is mounted on /; on-line resizing required
+Performing an on-line resize of /dev/VolGroup00/LogVol00 to 1007616 (4k) blocks.
+The filesystem on /dev/VolGroup00/LogVol00 is now 1007616 blocks long.
+</pre>
+</li>
+</ol>
+<p>Thanks to LVM now I have 2 more gigabytes on my virtual disk and no reinstallation was needed.</p>

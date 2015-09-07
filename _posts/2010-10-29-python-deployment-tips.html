@@ -1,0 +1,244 @@
+---
+layout: post
+title: Python deployment tips
+date: 2010-10-29 00:07:05.000000000 -07:00
+categories: []
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>In <a href="http://www.yaco.es" target="_self">Yaco</a> we've been working on improving our development and deployment process lately and I think it's time we share our achievements and mistakes with everybody. Besides <a href="http://www.python.org/" target="_self">python</a> and <a href="http://www.djangoproject.com/" target="_self">Django</a> being our core tools, some of the key technologies that we use are <a href="http://www.buildout.org/" target="_self">buildout</a>, <a href="http://nginx.org/" target="_self">nginx</a>, <a href="http://projects.unbit.it/uwsgi/" target="_self">uwsgi</a>, <a href="http://www.rpm.org/" target="_self">rpm</a>, <a href="http://www.fabfile.org/">fabric</a>, <a href="http://wiki.openvz.org/Main_Page" target="_self">openvz</a> and <a href="http://www.proxmox.com/" target="_self">proxmox</a>. So it's quite clear that you need to know a bunch of things to accomplish something powerful. Or maybe not. Let's see.</p>
+<p>Before I start with the inner details of how all these buzzwords work together, let met introduce you the antisocial python development law:</p>
+<h2><a href="/blog/assets/isolation.png"><img class="aligncenter size-medium wp-image-245" title="isolation" src="/blog/assets/isolation-300x260.png" alt="isolation" width="300" height="260" /></a></h2>
+<h2>isolation = k * repeatability</h2>
+<p>Where k is a constant that is inversely proportional to the probability of you saying "It works on my machine".</p>
+<p>That's it, the more isolate you are from the operating system the more easy is to repeat your environment. As a consequence the more you avoid using your system python and packages the easier your coworkers and deployment engineers will get your system up and runing. Let's see why:</p>
+<ul>
+<li>By not making any assumption of what packages and libraries you have installed on your machine you are democratizing your team. Everybody has the same oportunities to see how the system fails.</li>
+<li>Using your system python is a ticket to the deploy-this-on-the-very-old-production-server-nightmare rollercaster. It may work but it will probably not.</li>
+<li>If one day is working and the next day is not and you swear your god you didn't touch anything you may not be isolated enough and an update on your operating system or your build environment has changed without you noticing it. Reciprocally you will be able to upgrade your operating system more often without worries of breaking your projects.</li>
+<li>No more lost hours debugging a crash just to realize that you didn't run a service that you were supposed to run but you are not running because there are so many things you need to do by hand and you don't have an automated script to do so that your brain collapses.</li>
+</ul>
+<p>Everybody has experienced the frustration feeling of not being able to reproduce a problem. So follow my advice and isolate yourself as much as you can.</p>
+<p><a href="/blog/assets/wetcat.jpg"><img class="aligncenter size-medium wp-image-253" title="wetcat" src="/blog/assets/wetcat-300x243.jpg" alt="wetcat" width="300" height="243" /></a></p>
+<p>So you get it but the question is: how do I isolate myself from the scary, treacherous, evil system? Well, like in hospitals and nuclear stations there are several different levels of isolation, from safe, to super safe, to paranoid.</p>
+<h3>Safe level Option A</h3>
+<p>Just build your custom python by dowloading the tarball, uncompress it and do the configure, make and make install dance.</p>
+<p><strong>Advantages</strong>: you don't mess with the system, the system doesn't mess with you. No more fear to upgrade your distro, nothing will break. No more fear to update a package you need, your desktop application won't break. Another advantage is that you can do the same in the deployment server if its operating system is too old and you are stuck with python 2.4.</p>
+<p><strong>Disadvantages</strong>: be careful when compiling your python or you will get a barebone executable with no support for a bunch of things like ssl, zip, bzip2, readline, ... The solution is to install the development packages from your distro before compiling your python.</p>
+<h3>Safe level Option B</h3>
+<p>Use virtualenv with --no-site-packages and you will get a directory completely isolated from you system python.</p>
+<p><strong>Advantages</strong>: very fast and cheap to get started since you don't need to compile python. It actually uses your system python with all its features but without any of your system packages.</p>
+<p><strong>Disadvantages</strong>: it still uses your system python so when you deploy you may find your server python is different. Deploy soon and you will avoid nasty surprises.</p>
+<h3>Safe level Option C</h3>
+<p>Use buildout with your system python. Use this option for a recently installed operating system while your site-packages is still clean.</p>
+<p><strong>Advantages</strong>: easy to get started</p>
+<p><strong>Disadvantages</strong>: you need to be very disciplinated in orde not to polute your system site-packages. For example, everytime you use easy_install or pip it will get dirty. Always install your dependencies through buildout.</p>
+<h3>Super safe level</h3>
+<p>Combine Safe level A or B with buildout. Now you can share your custom python or your virtualenv with different Django projects and nothing will get messy since all your dependencies will get installed inside buildout.</p>
+<h3>Paranoid level</h3>
+<p>Compile your python, use virtualenv and buildout. This is like having sex with two condoms and anticonception pills. Maybe not the most pleasure thing but certainly the safest.</p>
+<p style="text-align: center;"><a href="http://www.hollow-hill.com/sabina/2009/04/oh_that_evoso_paranoid_all_the_time.html"><img class="aligncenter" src="/blog/assets/everyone-hates-paranoid.jpg" alt="" width="400" height="400" /></a></p>
+<p>I've been pretty well with custom python and buildout, e.g. super safe level but sometimes, under the right circunstances, I've played paranoid level. Some people in my office prefer virtualenv and buildout. It doesn't matter as long as you understand the risks and are consistent.</p>
+<p>The nice thing about using buildout is that it takes care of your python dependencies and other parts of your build automatically, for you. So having your development environment set up is a matter of minutes and it's pretty automated.</p>
+<p>So, what does our standard buildout do for us? A bunch of things:</p>
+<ol>
+<li>Download a specific Django version and put it on your PYTHONPATH</li>
+<li>Download all your python dependencies and put them on your PYTHONPATH</li>
+<li>Download and compile uwsgi</li>
+<li>Download and compile nginx</li>
+<li>Set nginx and uwsgi to work together with your Django project</li>
+<li>Set supervisord to run and monitor everything</li>
+</ol>
+<p>And all this stuff is done automatically, with a couple of commands. I think it's a pretty advanced deployment that you can have in a few minutes. Our buildout.cfg file looks like this:</p>
+<pre>
+[buildout]
+parts =
+     python
+     django
+     uwsgi-download
+     uwsgi-compilation
+     nginx
+     nginx-conf
+     yourproject
+     zc.sourcerelease
+     releaser
+     service
+
+develop = .
+eggs = yourproject
+
+[python]
+recipe = zc.recipe.egg
+interpreter = py
+eggs = ${buildout:eggs}
+
+[django]
+recipe = djangorecipe
+version = http://code.djangoproject.com/svn/django/branches/releases/1.2.X
+project = yourproject
+settings = settings
+wsgi = true
+eggs = ${buildout:eggs}
+
+[uwsgi-download]
+recipe = gocept.download
+url = http://projects.unbit.it/downloads/uwsgi-0.9.5.4.tar.gz
+strip-top-level-dir = true
+md5sum = 822c846484dcd6cc9f6d79118ed7e97a
+
+[uwsgi-compilation]
+recipe = yaco.recipe.uwsgi
+uwsgi-location = ${uwsgi-download:location}
+
+[uwsgi-conf]
+socket-path = ${buildout:directory}/var/run/uwsgi.sock
+pid-path = ${buildout:directory}/var/run/uwsgi.pid
+log-path = ${buildout:directory}/var/log/uwsgi.log
+python-path = ${buildout:directory}/${django:project}/
+wsgi-path = ${buildout:bin-directory}/django.wsgi
+
+[nginx]
+recipe = zc.recipe.cmmi
+url = http://nginx.org/download/nginx-0.8.34.tar.gz
+extra_options =
+    --conf-path=${buildout:directory}/etc/nginx/nginx.conf
+    --error-log-path=${buildout:directory}/var/log/nginx-error.log
+    --http-log-path=${buildout:directory}/var/log/nginx-access.log
+    --pid-path=${buildout:directory}/var/run/nginx.pid
+    --lock-path=${buildout:directory}/var/lock/nginx.lock
+    --add-module=${uwsgi-download:location}/nginx/
+
+[nginx-conf]
+recipe = collective.recipe.template
+input = ${buildout:directory}/templates/nginx.conf.in
+output = ${buildout:directory}/etc/nginx/nginx.conf
+port = 8080
+project_location = ${buildout:directory}/${django:project}
+django_location = ${django:location}
+uwsgi_sock_path = ${uwsgi-conf:socket-path}
+uwsgi_location = ${uwsgi-download:location}
+
+[supervisor]
+recipe = collective.recipe.supervisor
+port = 9080
+user = admin
+password = admin
+pidfile = ${buildout:directory}/var/run/supervisord.pid
+serverurl = http://localhost:${supervisor:port}
+plugins = superlance
+programs =
+    0 nginx (stderr_logfile=NONE stdout_logfile=${buildout:directory}/var/log/nginx-error.log) ${nginx:location}/sbin/nginx [ -c ${buildout:directory}/etc/nginx/nginx.conf ] true
+    1 uwsgi (stderr_logfile=NONE stdout_logfile=${uwsgi-conf:log-path}) ${buildout:bin-directory}/uwsgi [ -p 1 -C -A 4 -m -s ${uwsgi-conf:socket-path} --wsgi-file ${uwsgi-conf:wsgi-path} --pythonpath ${uwsgi-conf:python-path} --pidfile ${uwsgi-conf:pid-path} ] true
+</pre>
+<p>Some notes about this file:</p>
+<ul>
+<li>You should replace the string 'yourproject' with the name of your Django project</li>
+<li>The python part is useful to have a custom python interpreter in bin/py with the PYTHONPATH configured the same as your Django project. I use it to debug import errors.</li>
+<li>In the Django part it will create yourproject if it does not already exist</li>
+<li>The yaco.recipe.uwsgi recipe is needed in the uwsgi-compilation part because no matter how good uwsgi is, its build system is really bad and hard to integrate with this kind of tools.</li>
+<li>Note that the supervisord web interface will be on port 9080 and the nginx serving your Django on port 8080</li>
+<li>You still need the nginx.conf.in template that the nginx-conf part uses but it's just a simple nginx configuration file with a couple of string substitutions.</li>
+</ul>
+<p>Alright, before running the bootstrap thing, make sure you are a good Python citizen and you have the common project metadata files like README, CHANGES, LICENSE and more important, the setup.py distutils/setuptools file. Buildout is going to need it. You should put your python dependencies in the install_requires argument of the setup function. Something like this:</p>
+<pre>
+import os
+from setuptools import setup, find_packages
+
+def read(*rnames):
+    return open(os.path.join(os.path.dirname(__file__), *rnames)).read()
+
+setup(
+    name='yourproject',
+    version='0.1.0',
+    url='http://url-to-your-project',
+    license='GPL',
+    description='...',
+    long_description=(read('README') + '\n\n' + read('CHANGES.txt')),
+    author='Your Name ',
+    classifiers=[
+        'Development Status :: early stages',
+        'Framework :: Django',
+        'Intended Audience :: Developers',
+        'License :: GPL',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python',
+        ],
+    packages=find_packages(yourproject'),
+    package_dir={'': yourproject'},
+    install_requires=[
+        'distribute',
+        'django-piston',
+        'feedparser',
+        'South',
+        'MySQL-python',
+        'python-dateutil',
+        'httplib2',
+        'django-celery',
+        ],
+)
+</pre>
+<p>As you can see I have a bunch of dependencies in my example.</p>
+<p>Now do the buildout dance:</p>
+<pre>
+python bootstrap.py --distribute
+bin/buildout
+</pre>
+<p>And make sure you are not using your system python in the first command or a kitten will get killed.</p>
+<p><a href="http://www.bobpitch.com/anon/Mrs_Grouty_sad%20kitten.jpg"><img class="aligncenter" src="/blog/assets/Mrs_Grouty_sad_kitten.jpg" alt="" width="288" height="384" /></a></p>
+<p>After a few minutes you will be able to run the following commands:</p>
+<pre>
+bin/django syncdb     # to create your database tables
+bin/django runserver  # to run your development server
+bin/supervisord       # to run your production lighting fast server
+</pre>
+<p>And the best thing is that once you have this all setup, your team partners will have all of this for free and all of you will have exactly the same environment. You won't hear <em>"It works on my computer"</em> again.</p>
+<p><a href="http://www.codinghorror.com/blog/2007/03/the-works-on-my-machine-certification-program.html"><img class="aligncenter" src="assets/6a0120a85dcdae970b0128776ff992970c-pi" alt="" width="200" height="193" /></a></p>
+<p>All this is good and pretty fast to deploy but we want more. How about creating a source distribution in a tarball that we can copy to our remote server and run with all our dependencies frozen? You asked it, you got it! Add this to your buildout:</p>
+<pre>
+parts += releaser
+
+[releaser]
+recipe = zc.recipe.egg:script
+eggs = zc.sourcerelease
+</pre>
+<p>Now commit that change and run these commands:</p>
+<pre>
+bin/buildout
+bin/buildout-source-release hhttps://your-svn-repository-url/path/to/your/project buildout.cfg --name yourproject-0.1.0</pre>
+<p>After a couple of minutes you will have a file called yourproject-0.1.0.tgz with everything your project needs inside. Go to the server, untar it and run these commands:</p>
+<pre>
+python install.py bootstrap
+python install.py
+</pre>
+<p>Just make sure the python on your server is the same version as the python you used to create the source release. This will deploy the buildout without connecting to the network to download anything since it has everything it needs.</p>
+<p>Pretty neat, huh? Well, we really want more. How about a rpm package or a debian one? Having your project in your server operating system package is good for updates since it will respect the changes that you did to your configuration files and the system administrator will be very happy.</p>
+<p>To get the rpm you just need to write a simple spec that pick the yourproject-0.1.0.tgz file and run the install.py in a specific location. I even build a custom python inside the rpm file to avoid server incompatibilities. I starting to think about creating two separate packages, one for the python and one for the project and make the later depends on the former. That would be much cleaner, but for now the first option does the job perfectly. I've never written a spec file before but I must admit it was much easier than I thought. Sadly, I can't say the same about Debian packages. But the important thing is that the idea is the same.</p>
+<p>So, that's how we build and deploy our final solutions to our clients and we and they are very happy with the outcomes. But wait, there is more. How about nighty builds? Building and deploying rpm packages just for the nighty builds is quite heavy so that's where we are using Fabric.</p>
+<p><a href="http://twitter.com/#!/mviera" target="_self">Manuel Viera</a> has created a system that roughly does the following:</p>
+<ol>
+<li>Creates a OpenVZ virtual machine programatically from a CentOS 5.5 or Debian 5.0 template</li>
+<li>Configure its network programmatically too</li>
+<li>Execute a fabric script that:
+<ol>
+<li>Connects to the fresh virtual machine through ssh</li>
+<li>Install a bunch of operating system packages that will be needed to run a buildout. These packages are listed in a file that every project has: deployment.cfg</li>
+<li>Creates a user and a group</li>
+<li>With that user, fetch, configure, compile and install a custom python. The version of this python is also in the deployment.cfg file.</li>
+<li>Copy the project files to the virtual machine or, in some cases, just do a checkout/clone</li>
+<li>Run the bootstrap and buildout dance with the python it just compiled.</li>
+<li>Run the test suite and fetch the results</li>
+<li>Optionally, creates the source distribution and the rpm package</li>
+</ol>
+</li>
+<li>Destroy the virtual machine</li>
+</ol>
+<p>And we are on the process to run this algorithm for every project, every night. I bet that will give us another point in the <a href="http://www.joelonsoftware.com/articles/fog0000000043.html" target="_blank">Joel Test</a> :-)</p>
+<p>Kudos to Manu and his mighty powers.</p>

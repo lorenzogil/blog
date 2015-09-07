@@ -1,0 +1,122 @@
+---
+layout: post
+title: 'Zope3 for Djangoers. Part 3: Views and templates'
+date: 2007-09-12 23:20:05.000000000 -07:00
+categories:
+- Ordenadores
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>I've been talking about how to make a web application in my last two posts but still no single html code has been written so far. What an hoax you may think. Well don't panic, in this article you will finally get some pixels on the screen. :-)</p>
+<p>As usually I'll start remembering how to write a view in Django. We'll use the models of our last article to keep things simple. So, let's say you want a view that renders a list of your records, each one with a list of songs. Not too hard. You start writing your view function in a file called views.py inside your app directory:</p>
+<pre>
+from django.shortcuts import render_to_response
+from myapp.models import Record
+
+def all_my_records(request):
+    records = Record.objects.all()
+    return render_to_response('record_list.html', dict(records=records))
+</pre>
+<p>Now you need to write your template file, in this case we've called it record_list.html and it will live inside a templates directory in the root directory of your Django project:</p>
+<pre>
+&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1 Strict//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"&gt;
+&lt;html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"&gt;
+&lt;head&gt;&lt;title&gt;Record list&lt;/title&gt;&lt;/head&gt;
+&lt;body&gt;
+  &lt;h1&gt;My records:&lt;/h1&gt;
+  {% for record in records %}
+    &lt;h2&gt;{{ record.title }} - {{ record.artist }}&lt;/h2&gt;
+    &lt;ul&gt;
+    {% for song in record.song_set.all() %}
+      &lt;li&gt;{{ song.title }} - {{ song.length }} seconds&lt;/li&gt;
+    {% endfor %}
+    &lt;/ul&gt;
+  {% endfor %}
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p>Now we need to do a couple of administrative tasks to make this work. First, we need to tell Django that our templates directory is that one. We said so in the settings.py file of our project:</p>
+<pre>
+TEMPLATE_DIRS = ('/home/lgs/DJProject/templates',)
+</pre>
+<p>Next, we should write a urls.py file inside the project and another one inside the application. Let's start with the one inside the application directory:</p>
+<pre>
+from django.conf.urls.defaults import patterns
+
+urlpatterns = patterns('',
+    (r'^my_records/$', 'DJProject.DJApp.views.all_my_records'),
+)
+</pre>
+<p>As you can see we associate a url (/my_records/) with a view function. Now we just need to include this urls from the master urls.py file in the project directory:</p>
+<pre>
+from django.conf.urls.defaults import patterns, include
+
+urlpatterns = patterns('',
+(r'^/', include('DJProject.DJApp.urls')
+)
+</pre>
+<p>And finally a line in the settings.py file:</p>
+<pre>
+ROOT_URLCONF = 'DJProject.urls'
+</pre>
+<p>Even that Django does not have a configuration language (ZCML) it needs quite a few of configuration settings. This is good indeed since it makes it a lot more powerful and flexible. Note that the settings.py changes and the urls.py of the project directory needs to be changed only onced. If we were to write another view for the DJApp only the urls.py of this directory would need to be changed.</p>
+<p>Another good point for Django is its template system. It's quite readable and pretty powerful. But as any other template system, simple examples like this one are no real issue for it. We will push it harder later on and we will see how good it actually is.</p>
+<p>You can test your view by starting the web server and pointing your browser to http://127.0.0.1:8000/my_records/<br />
+You will probably get an empty list since there is no records in your database yet :-)</p>
+<p>Time to move to Zope3. Let's try to write the same view but first let's do an assumption. Our record objects will be stored in the root of the ZODB tree. This will make things simple enough to concentrate in the view issue.</p>
+<p>As a convention we will put our HTTP view code in a subpackage called 'browser'. So let's create that directory inside our project package and put this code in its __init__.py file:</p>
+<pre>
+from myapp.interfaces import IRecord
+
+class AllMyRecordsView(object):
+    def records(self):
+        for obj in self.context.values():
+            if IRecord.providedBy(obj):
+                yield obj
+</pre>
+<p>This time it's not a function but a class. Not much harder than the Django version, huh? It just have a method that returns an iterator of the records in the context object. Here the context will be the root container. We need the extra if just in case there is something else in the root container.</p>
+<p>Now time for the template, introducing the ZPT (Zope Page Template) language:</p>
+<pre>
+&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1 Strict//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"&gt;
+&lt;html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"&gt;
+&lt;head&gt;&lt;title&gt;Record list&lt;/title&gt;&lt;/head&gt;
+&lt;body&gt;
+  &lt;h1&gt;My records:&lt;/h1&gt;
+  &lt;div tal:repeat="record view/records" tal:omit-tag=""&gt;
+    &lt;h2 tal:content="python:'%s - %s' % (record.title, record.artist)"&gt;Sticky Fingers - Rolling Stones&lt;/h2&gt;
+    &lt;ul&gt;
+      &lt;li tal:repeat="song record/values"
+             tal:content="python:'%s - %d seconds' % (song.title, song.length)"&gt;Wild Horses - 220 seconds&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/div&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p>I will tell you that the final html is the same in both versions. I think the Django one is easier to read but we have an advantage with the Zope one is that it is a valid xhtml file that can be edited and previsualized in any HTML editor so you can split your work between programmers and web designers. As you have seen in the previous example we even provided some default values (they will be replaced with the real ones in the runtime version) so we can get a grasp of how it will look like at the end.</p>
+<p>Supposed we save the previous template in a file called record_list.pt. We will need to plug the pieces with a bit of configuration code. Put this code in a configure.zcml file inside your browser package:</p>
+<pre>
+&lt;configure xmlns="http://namespaces.zope.org/browser"&gt;
+
+&lt;page
+    name="my_records"
+    for="zope.app.folder.interfaces.IFolder"
+    class=".AllMyRecordsView"
+    template="record_list.pt"
+    permission="zope.Public" /&gt;
+
+&lt;/configure&gt;
+</pre>
+<p>Now include this browser package from your main configure.zcml file in the root of your app:</p>
+<pre>
+&lt;include package=".browser"/&gt;
+</pre>
+<p>And you are ready to go. Start the server and go to http://127.0.0.1:8080/my_records</p>
+<p>But having no way to add content to our web application is not really fun. We could add it from a pure Python app but we should expect something else from this great frameworks. See you in part 4 of these series where we'll discover the black magick mistery of automatic web forms for adding and editing content!</p>

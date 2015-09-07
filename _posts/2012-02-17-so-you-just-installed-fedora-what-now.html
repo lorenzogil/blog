@@ -1,0 +1,61 @@
+---
+layout: post
+title: So you just installed Fedora. What now?
+date: 2012-02-17 00:43:13.000000000 -08:00
+categories:
+- Ordenadores
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>I've been a happy <a href="http://fedoraproject.org/">Fedora</a> user since it was not called Fedora, not even Fedora Core. I used Redhat 8 and Redhat 9, then Fedora Core 1-6, then Fedora 7 - 16. When I got my current laptop, in september of 2009 I installed Fedora 11 and I've been upgrading without formating the hard drive until now. After 4 upgrades (12, 13, 14 and 15) I decided to install it from scratch since every upgrade leaves old stuff and I think it's a good practice to clean it up every once in a while.</p>
+<p>In this post I'll summarize the things I did after installing Fedora 16 64 bits so I can use it as my personal reference for future installations.</p>
+<h3>Post install quick changes</h3>
+<p>The installation went smooth and after the first boot my main user was configured with English as its language. I changed it to Spanish and answered yes to the question about renaming the main folders (Downloads, Music, Videos, etc.).</p>
+<p>As I installed Fedora with a encrypted home partition, every time my computer boots up I get asked for the password to open such partition. So I configured GNOME to automatically log in with my main user to avoid entering another password.</p>
+<p><a href="/blog/assets/inicio-sesion-automatico.png"><img class="aligncenter size-medium wp-image-363" title="Auto login" src="/blog/assets/inicio-sesion-automatico-300x197.png" alt="Auto login" width="300" height="197" /></a></p>
+<p>After that I configured my online accounts. This is a new feature of GNOME 3.2. It's nice to have your Google contacts integrated in GNOME aswell as your instant messaging accounts. I also set a picture for my user profile.</p>
+<p><a href="/blog/assets/cuentas-gnome.png"><img class="aligncenter size-medium wp-image-361" title="GNOME Accounts" src="/blog/assets/cuentas-gnome-256x300.png" alt="GNOME Accounts" width="256" height="300" /></a></p>
+<h3>System update and must-have programs</h3>
+<p>Then I updated the system since it was a couple of months since Fedora 16 came out:</p>
+<pre>yum update</pre>
+<p>Then I installed a few programs I can't live without:</p>
+<pre>yum install epiphany gnote gnucash vim emacs hamster-applet Django rhino gimp planner wine</pre>
+<h3>Backup restore</h3>
+<p>I copied my personal files from my external hard drive into my home directory but I didn't do the same with the configuration files (everything starting with a dot). The reason is that I wanted to selectively copy those configuration files I know what they do and start doing source control on them. I already do that with <a href="https://github.com/lorenzogil/empetado">Emacs</a> and <a href="https://bitbucket.org/lgs/dotfiles/">several other programs</a></p>
+<h3>Non Fedora packages</h3>
+<p>Then it was time to install that software that does not come with Fedora for different reasons (propietary software, not well packaged applications, etc.).</p>
+<p>First I installed Chromium following the instructions of <a href="http://fedoraproject.org/wiki/Chromium">http://fedoraproject.org/wiki/Chromium</a></p>
+<p>Using similar instructions I installed the Adobe Flash plugin for the browsers: <a href="http://fedoraproject.org/wiki/Flash">http://fedoraproject.org/wiki/Flash</a></p>
+<p>Then I added the RPMFusion repository with these instructions <a href="http://rpmfusion.org/Configuration">http://rpmfusion.org/Configuration</a> and then I installed the NVidia drivers for my graphic card:</p>
+<pre>yum install kmod-nivida</pre>
+<p>As a web developer I like to have as many browsers as possible so I installed Opera: <a href="http://www.opera.com/browser/download/">http://www.opera.com/browser/download/</a></p>
+<p>When I tried to install <a href="http://www.skype.com/intl/es/get-skype/on-your-computer/linux">Skype</a> it didn't work. Then I realized that the binary available Skype is compiled for 32 bits systems. So I had to install the 32 bits dependencies for Skype:</p>
+<pre>yum install mesa-dri-filesystem-7.11.2-1.fc16.i686 libgcc-4.6.2-1.fc16.i686 glibc-2.14.90-24.fc16.4.i686 nss-softokn-freebl-3.13.1-15.fc16.i686 libstdc++-4.6.2-1.fc16.i686 zlib-1.2.5-6.fc16.i686 libjpeg-turbo-1.1.1-3.fc16.i686 libffi-3.0.10-1.fc16.i686 2:libogg-1.2.2-3.fc15.i686 libselinux-2.1.6-5.fc16.i686 gamin-0.1.10-10.fc16.i686 glib2-2.30.2-1.fc16.i686 libICE-1.0.7-1.fc16.i686 ncurses-libs-5.9-2.20110716.fc16.i686 1:dbus-libs-1.4.10-3.fc16.i686 freetype-2.4.6-4.fc16.i686 expat-2.0.1-11.fc15.i686 alsa-lib-1.0.24-2.fc15.i686 libcom_err-1.41.14-2.fc15.i686 fontconfig-2.8.0-4.fc16.i686 readline-6.2-2.fc16.i686 sqlite-3.7.7.1-1.fc16.i686 flac-1.2.1-6.fc12.i686 1:libvorbis-1.3.2-1.fc15.i686 libsndfile-1.0.25-1.fc16.i686 llvm-libs-2.9-6.fc16.i686 libtiff-3.9.5-1.fc16.i686 2:libpng-1.2.46-1.fc16.i686 libXau-1.0.6-2.fc15.i686 libxcb-1.7-3.fc16.i686 libX11-1.4.3-1.fc16.i686 libXext-1.3.0-1.fc16.i686 libXfixes-5.0-1.fc16.i686 libXrender-0.9.6-2.fc15.i686 libXi-1.4.5-1.fc16.i686 libXtst-1.2.0-2.fc15.i686 libXrandr-1.3.1-2.fc15.i686 libXcursor-1.1.11-3.fc15.i686 libXdamage-1.1.3-2.fc15.i686 libXinerama-1.1.1-2.fc15.i686 libXxf86vm-1.1.1-2.fc15.i686 libpciaccess-0.12.1-1.fc15.i686 libdrm-2.4.30-1.fc16.i686 mesa-dri-drivers-7.11.2-1.fc16.i686 mesa-libGL-7.11.2-1.fc16.i686 libasyncns-0.8-2.fc15.i686 keyutils-libs-1.5.2-1.fc16.i686 krb5-libs-1.9.2-4.fc16.i686 openssl-1.0.0g-1.fc16.i686 1:qt-4.8.0-7.fc16.i686 libuuid-2.20.1-2.2.fc16.i686 libSM-1.2.0-2.fc15.i686 tcp_wrappers-libs-7.6-64.fc16.i686 pulseaudio-libs-0.9.23-1.fc16.i686 lcms-libs-1.19-4.fc16.i686 libmng-1.0.10-5.fc15.i686 1:qt-x11-4.8.0-7.fc16.i686 alsa-plugins-pulseaudio-1.0.24-3.fc16.i686 libXScrnSaver-1.2.1-2.fc15.i686 libv4l-0.8.5-1.fc16.i686 libXv-1.0.6-2.fc15.i68</pre>
+<p>I hope Skype gets better and they release a 64 bits version as the Adobe guys did with Flash, finally :-)</p>
+<p>Then I installed Dropbox following these instructions <a href="http://www.dropbox.com/install?os=lnx">http://www.dropbox.com/install?os=lnx</a> and after that I started the Dropbox daemon:</p>
+<pre>dropbox start -i</pre>
+<p>Finally I installed support for listening mp3 and watching videos in propietary codecs:</p>
+<pre>yum install gstreamer-plugins-bad gstreamer-plugins-ugly</pre>
+<h3>Advanced configuration</h3>
+<p>Now, it was time to configure some things in more detail. I installed gnome-tweak-tool and enabled the date in the clock area of the GNOME Shell top bar.</p>
+<p>I also setup some keyboard shortcuts:</p>
+<ul>
+<li>Windows key + T opens a Terminal</li>
+<li>Left shift  + Right shift switches my keyboard layout beween English and Spanish (I use English layout for programming and Spanish layout for writting docs and emails)</li>
+</ul>
+<p>I restored my Hamster db into the <em>~/.local/share/hamster-applet/</em> directory</p>
+<p>I also configured Subversion to not store my password in plain text but in GNOME Keyring, which stores them encrypted. To do so I added the following option to the <em>~/.subversion/config</em> file:</p>
+<pre>password-stores = gnome-keyring</pre>
+<p>and this other option into the <em>[global]</em> section of the<em> ~/.subversion/servers</em> file:</p>
+<pre>
+[global]
+store-plaintext-passwords = no
+</pre>

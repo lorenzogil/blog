@@ -1,0 +1,136 @@
+---
+layout: post
+title: Protecting Mercurial repositories with repoze.who and repoze.what
+date: 2010-11-27 22:57:25.000000000 -08:00
+categories:
+- Ordenadores
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>After months of planning and thinking about it we are starting to adding support for <a href="http://mercurial.selenic.com/" target="_self">Mercurial</a> at <a href="http://www.yaco.es" target="_self">Yaco</a>. It's far from finished but it is already tested in a couple of projects. We used and still use Subversion for most of our projects and our workflow is really tied to it.</p>
+<p>When I started to thing about using Mercurial at Yaco I sketched up a list of things that needed to be done:</p>
+<ol>
+<li>Migrate to <a href="http://trac.edgewall.org/milestone/0.12" target="_self">Trac 12</a> since it has support for multiple repositories of different types. This is really important not only because you can see your Mercurial repos in Trac but because it allow us to migrate step by step. You can have a Subversion repository for the QA and graphic design people and one or more Mercurial repos for developers. Also it's up to the project manager to decide wheter he wants to use Subversion or Mercurial. We don't want to impose a technology when Subversion is just fine for many situations.</li>
+<li>Add several hooks in different stages of a changeset lifecycle:
+<ol>
+<li>Before commit, check basic things about the quality of the code (pyflakes, pep8, pdb, ...)</li>
+<li>Before commit check that the message mentions one or more Trac tickets</li>
+<li>After commit update one or more Trac tickets</li>
+</ol>
+</li>
+<li>Serve the repositories via https and add a web interface to them. This mean adding authentication and authorization for them too.</li>
+<li>Train our people to use the new system</li>
+<li>Define common workflows for our development patterns</li>
+</ol>
+<p>Step 1 was done several months ago and we are really happy with Trac 12.</p>
+<p>Step 2 was achieved using <a href="http://pypi.python.org/pypi/hghooks/" target="_self">hghooks</a> and <a href="http://pypi.python.org/pypi/yaco.hghooks" target="_self">hghooks.yaco</a>, a couple of python packages I wrote to suite this goal.</p>
+<p>Step 3 is the reason of this post. More on this later.</p>
+<p>We are between step 4 and 5 and right now and that is causing minor griefs among our developers :-)</p>
+<p>So, let's talk about authentication and authorization in the context of Mercurial repositories. Mercurial comes with a WSGI application for serving the repositories via HTTP called <a href="http://mercurial.selenic.com/wiki/HgWebDirStepByStep" target="_self">hgwebdir</a>. It's pretty easy to setup and has a nice looking web interface with lots of cool features.</p>
+<p>But we have a couple of problems with hgwebdir:</p>
+<ul>
+<li>It doesn't handle autthentication at all. This is actually a feature, but we need to add some bits for this.</li>
+<li>It reads authorization from a different file for each repository it handles. This authorization information does not have group support neither. This mean we need to duplicate a lot of information among repositories. Most of our developers have access to most of our repositories, while each customer has (read only) access just to the repositories related to his project.</li>
+</ul>
+<p>With Subversion we do LDAP authentication with an Apache module and use <a href="http://svnbook.red-bean.com/en/1.2/svn.serverconfig.httpd.html#svn.serverconfig.httpd.authz.perdir" target="_self">mod_authz_svn</a> for authorization purposes. This last module is really good and it allows you to keep all your authorization information in a single file. Really convenient.</p>
+<p>Besides that, we would like to experiment with web servers other than Apache like nginx or Cherokee so we don't want to depend on Apache for authentication neither.</p>
+<p>Our solution involves using <a href="http://docs.repoze.org/who/1.0/" target="_self">repoze.who</a> for authentication and <a href="http://what.repoze.org/docs/1.0/" target="_self">repoze.what</a> for authorization. These are great Python packages that allows you to build really flexible middleware stuff. repoze.who and repoze.what don't do anything useful by their own but define a set of rules and components to interact with the users and applications. Then there are plugins for both packages that really do the authorization and authentication stuff. One nice thing about repoze is that it uses the WSGI standard heavily so it's easy to integrate them with other WSGI applications like hgwebdir.</p>
+<figure>
+  <img class="size-full wp-image-276 " title="WSGI middleware is like onion layers" src="/blog/assets/onion.jpg" alt="" width="400" height="298" />
+  <figcaption>WSGI middleware is like onion layers</figcaption>
+</figure>
+<p>We use <a href="http://code.gustavonarea.net/repoze.who.plugins.ldap/Using.html" target="_self">repoze.who.plugins.ldap.LDAPSearchAuthenticatorPlugin</a> for authentication. It connects to our LDAP server and check that the user and password entered by the user matches a user in our directory. The way the user enter his user and password is through authentication basic. repoze.who allows several other mechanisms but that one is fine for us.</p>
+<p>Then for authorization we use the <a href="http://www.lorenzogil.com/projects/repoze.what.plugins.hgwebdir/" target="_self">repoze.what.plugins.hgwebdir</a> package that I wrote for our needs but trying to make it general enough so it can be used by other people. This plugin allows the system administrator to write all the repositories authorization information in a single file very similar to the one used by mod_authz_svn.</p>
+<p>To put everything together we use a buildout that configures Mercurial, a nginx webserver and all the WSGI middleware and applications to serve the repositories.</p>
+<p>Let's see how our final WSGI application looks like:</p>
+<pre>
+from optparse import OptionParser
+import sys
+from wsgiref.simple_server import make_server
+
+import mercurial.util
+import mercurial.dispatch
+
+from mercurial.hgweb.hgwebdir_mod import hgwebdir
+
+from repoze.who.plugins.basicauth import BasicAuthPlugin
+from repoze.who.plugins.ldap import LDAPSearchAuthenticatorPlugin
+
+from repoze.what.middleware import setup_auth
+
+from repoze.what.plugins.hgwebdir.adapters import HgwebdirGroupsAdapter
+from repoze.what.plugins.hgwebdir.adapters import HgwebdirPermissionsAdapter
+from repoze.what.plugins.hgwebdir.adapters import get_public_repositories
+from repoze.what.plugins.hgwebdir.middleware import protect_repositories
+
+def add_auth(app, authz_file):
+   # Defining the group adapters; you may add as much as you need:
+   groups = {'all_groups': HgwebdirGroupsAdapter(authz_file)}
+
+   # Defining the permission adapters; you may add as much as you need:
+   permissions = {'all_perms': HgwebdirPermissionsAdapter(authz_file)}
+
+   # repoze.who identifiers; you may add as much as you need:
+   basicauth = BasicAuthPlugin('Yaco Hg repositories')
+   identifiers = [('basicauth', basicauth)]
+
+   # repoze.who authenticators; you may add as much as you need:
+   ldap_auth = LDAPSearchAuthenticatorPlugin('ldap://ldap.yaco.es',
+                                     'ou=People,dc=yaco,dc=es', returned_id='login')
+   authenticators = [('ldap_auth', ldap_auth)]
+
+   # repoze.who challengers; you may add as much as you need:
+   challengers = [('basicauth', basicauth)]
+
+   app_with_auth = setup_auth(
+                         app,
+                         groups,
+                         permissions,
+                         identifiers=identifiers,
+                         authenticators=authenticators,
+                         challengers=challengers)
+   return app_with_auth
+
+def make_app(hg_config, authz_file):
+   original_app = hgwebdir(hg_config)
+   secured_app = protect_repositories(original_app,
+                         get_public_repositories(authz_file))
+   return add_auth(secured_app, authz_file)
+</pre>
+<p>The main entry point here is the make_app function. It recieves two filenames, one for configuring the repositories themselves and one for the authorization stuff. As you can see we are adding a couple of layers to the hgwebdir application. The inner one deals with authorization and the outer one with authentication. We have to deactivate hgwebdir authorization support to make it work. Otherwise authorization is done by two different modules and it won't work. To deactivate it we configure all of our repositories with this option:</p>
+<pre>
+[web]
+allow_push = *
+</pre>
+<p>By default hgwebdir allows read access to everybody and denies write access to everybody. We keep read access as hgwebdir defaults and add write access to everybody. repoze.what.plugins.hgwebdir will handle this stuff for us.</p>
+<p>Now, to configure the authorization you just need to write a file like this:</p>
+<pre>
+[groups]
+group1 = lgs, mviera
+group2 = john, peter
+
+[repo1]
+@group1 = rw
+
+[repo2]
+@group2 = rw
+@group1 = r
+
+[repo3]
+* = r
+@group1 = rw
+</pre>
+<p>As I mentioned before, the syntax and semantics are very similar to the ones used in mod_authz_svn. One feature that is not possible with repoze.what.hgwebdir is specific authorization rules to some directories inside a repository.</p>
+<figure>
+  <a href="/blog/assets/esquema-hgwebdir.png"><img class="size-medium wp-image-279" title="Final arquitecture" src="/blog/assets/esquema-hgwebdir-279x300.png" alt="" width="279" height="300" /></a>
+  <figcaption>Final arquitecture</figcaption>
+</figure>
+<p>I hope everything is clearer with this last figure.</p>

@@ -1,0 +1,179 @@
+---
+layout: post
+title: Mapping inheritance to a RDBMS with storm. Autoproxy version
+date: 2009-01-27 01:05:57.000000000 -08:00
+categories:
+- Ordenadores
+tags:
+- zope
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>We saw in the Proxy version that some types of queries were not possible using the lazr.delegates package. <a href="/blog/ordenadores/2009/01/23/mapping-inheritance-to-a-rdbms-with-storm-proxy-version.html">We solved that problem</a> using Storm's Proxy objects but we lost easyness in the process.</p>
+<p>This time we will try to combine both aproaches to get the best of both worlds.</p>
+<p>The interface definitions do not change:</p>
+<pre>
+>>> from zope.interface import Interface, Attribute
+>>> class IPerson(Interface):
+...     name = Attribute("Name")
+...
+>>> class ISecretAgent(IPerson):
+...     passcode = Attribute("Passcode")
+...
+>>> class ITeacher(IPerson):
+...     school = Attribute("School")
+</pre>
+<p>Neither the Person class:</p>
+<pre>
+>>> from zope.interface import implements
+>>> from zope.interface.verify import verifyClass
+>>> from lazr.delegates import delegates
+>>> from storm.locals import Store, Storm, Unicode, Int, Proxy, Reference
+>>> class Person(Storm):
+...     implements(IPerson)
+...
+...     __storm_table__ = "person"
+...
+...     id = Int(allow_none=False, primary=True)
+...     name = Unicode()
+...     person_type = Int(allow_none=False)
+...     _person = None
+...
+...     def __init__(self, store, name, person_class, **kwargs):
+...         self.name = name
+...         self.person_type = person_class.person_type
+...         store.add(self)
+...         self._person = person_class(self, **kwargs)
+...
+...     @property
+...     def person(self):
+...         if self._person is None:
+...             assert self.id is not None
+...             person_class = BasePerson.get_class(self.person_type)
+...             self._person = Store.of(self).get(person_class, self.id)
+...         return self._person
+...
+>>> verifyClass(IPerson, Person)
+True
+</pre>
+<p>Now, the real magic is in the metaclass. We use it not only to register our subclasses (so the Person.person property can find them) but to automatically store the attributes we needed to set manually in our previous version: the person_id and person attributes and a proxy object for each Person attribute. It's like we are reimplementing inheritance in Python but not really :-)</p>
+<pre>
+>>> from storm.properties import PropertyPublisherMeta
+>>> class PersonType(PropertyPublisherMeta):
+...     def __init__(self, name, bases, dict):
+...         if hasattr(self, '__storm_table__'):
+...             # this need to be done before calling the superclass
+...             # otherwise Storm will cry about not having a primary key
+...             self.person_id = Int(allow_none=False, primary=True)
+...
+...         super(PersonType, self).__init__(name, bases, dict)
+...
+...         if not hasattr(self, '_person_types_registry'):
+...             self._person_types_registry = {}
+...         elif hasattr(self, '__storm_table__'):
+...             key = len(self._person_types_registry)
+...             self._person_types_registry[key] = self
+...             self.person_type = key
+...
+...             self.person = Reference(self.person_id, Person.id)
+...             self._add_proxy_properties()
+...
+...     def _add_proxy_properties(self):
+...         for name in IPerson:
+...             if not hasattr(self, name):
+...                 remote_attr = getattr(Person, name)
+...                 setattr(self, name, Proxy(self.person, remote_attr))
+...
+...     def get_class(self, person_type):
+...         return self._person_types_registry[person_type]
+</pre>
+<p>Not our BasePerson is really simple</p>
+<pre>
+>>> class BasePerson(Storm):
+...     __metaclass__ = PersonType
+...
+...     def __init__(self, person):
+...         self.person = person
+</pre>
+<p>And so are the subclasses. No repetition, so it is less prone to mistakes :-)</p>
+<pre>
+>>> class SecretAgent(BasePerson):
+...     implements(ISecretAgent)
+...
+...     __storm_table__ = "secret_agent"
+...     passcode = Unicode()
+...
+...     def __init__(self, person, passcode=None):
+...         super(SecretAgent, self).__init__(person)
+...         self.passcode = passcode
+...
+>>> verifyClass(ISecretAgent, SecretAgent)
+True
+>>> class Teacher(BasePerson):
+...     implements(ITeacher)
+...
+...     __storm_table__ = "teacher"
+...     school = Unicode()
+...
+...     def __init__(self, person, school=None):
+...         super(Teacher, self).__init__(person)
+...         self.school = school
+...
+>>> verifyClass(ITeacher, Teacher)
+True
+</pre>
+<p>Let's make sure our queries work as expected:</p>
+<pre>
+>>> from storm.locals import create_database
+>>> database = create_database("sqlite:")
+>>> store = Store(database)
+>>> result = store.execute("""
+...     CREATE TABLE person (
+...         id INTEGER PRIMARY KEY,
+...         person_type INTEGER NOT NULL,
+...         name TEXT NOT NULL)
+... """)
+>>> result = store.execute("""
+...     CREATE TABLE secret_agent (
+...         person_id INTEGER PRIMARY KEY,
+...         passcode TEXT)
+... """)
+>>> result = store.execute("""
+...     CREATE TABLE teacher (
+...         person_id INTEGER PRIMARY KEY,
+...         school TEXT)
+... """)
+...
+>>> secret_agent = Person(store, u"James Bond",
+...                        SecretAgent, passcode=u"007")
+>>> ISecretAgent.providedBy(secret_agent.person)
+True
+>>> teacher = Person(store, u"Albus Dumbledore",
+...                  Teacher, school=u"Hogwarts")
+>>> ITeacher.providedBy(teacher.person)
+True
+>>> store.commit()
+>>> del secret_agent
+>>> del teacher
+>>> store.rollback()
+>>> secret_agent = store.find(SecretAgent).one()
+>>> secret_agent.name, secret_agent.passcode
+(u'James Bond', u'007')
+>>> teacher = store.find(Teacher).one()
+>>> teacher.name, teacher.school
+(u'Albus Dumbledore', u'Hogwarts')
+>>> secret_agent = store.find(SecretAgent, SecretAgent.name==u'James Bond').one()
+>>> secret_agent.passcode
+u'007'
+>>> teacher = store.find(Teacher, Teacher.school==u'Hogwarts').one()
+>>> teacher.name
+u'Albus Dumbledore'
+</pre>
+<p>So we made it by using a metaclass that automatically generate a bunch of attributes.</p>

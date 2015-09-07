@@ -1,0 +1,117 @@
+---
+layout: post
+title: There are more than one way to do it
+date: 2009-04-19 20:48:57.000000000 -07:00
+categories:
+- Ordenadores
+tags:
+- python
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>I wrote a method the other day. It was not a particularly difficult method and before writing it, it didn't seem like a challenge. When I finished it, it looked quite good and simple but there was something that keep my eyes focused on a point instead of enjoying the method as a whole. Something similar as when you buy a shiny beatiful monitor, you plug it in and you discover it has a dead pixel. No matter how bright and fast your monitor is, that rotten pixel is ruining your experience.</p>
+<p>Let me show you my broken pixel.</p>
+<p>But before I'll give you a small explanation of what the method does. Its class has a list of collectors, where each collector is a callable that return a generator of photos . The method collect the photos of all collectors until a maximum is reached, then it return the photos using an auxiliar method that does its own job postprocesing the list of photos.</p>
+<p><a href="/blog/assets/carrusel.jpg"><img class="size-full wp-image-118" title="carrusel" src="/blog/assets/carrusel.jpg" alt="Example carrusel" width="476" height="68" /></a></p>
+<p>Here is my initial version:</p>
+<pre>
+def collect_photos1(self, destination):
+    n_photos_collected = 0
+    for collector in self.collectors:
+        for photo_info in collector(destination):
+            self.add_photo(photo_info)
+            n_photos_collected += 1
+            if n_photos_collected &gt; self.max:
+                return self.get_photos()
+     return self.get_photos()
+</pre>
+<p>As you can see, no rocket science so far. It's just a nested for loop that iterates over all the photos until we get as many as we want. The rotten pixel is the return self.get_photos() line. It is bad because it's duplicated, one in the finished condition and one at the end of the method. There are two problems with that duplication:</p>
+<ul>
+<li>The first one is a practical problem. What if, in the future, the get_photos aux method need to receive a parameter. We need to update the call to that method, but as we have two calls there is a chance that we forget to update one of them. If we had only one the error probability of an update would be lower.</li>
+<li>The second problem is a theorical one. We are using a nested for loop to iterate over a list of lists of photos but we do not know in advance how long those lists are and how many loop body we are going to iterate.</li>
+</ul>
+<p>My second version is basically the same as the first but instead of duplicating the return self.get_photos line we are duplicating the break condition. Now, if we add a parameter to the get_photos method we will have to update just one call. But if we want to add another condition to stop collecting photos we will have to update two if statements. In other words, this version is pretty much the same.</p>
+<pre>
+def collect_photos2(self, destination):
+    n_photos_collected = 0
+    for collector in self.collectors:
+        for photo_info in collector(destination):
+            self.add_photo(photo_info)
+            n_photos_collected += 1
+            if n_photos_collected &gt; self.max:
+                break
+        if n_photos_collected &gt; self.max:
+            break
+     return self.get_photos()
+</pre>
+<p>Then I tried to convert the for loops into while loops since basic computer science tell us that a while loop is the choice to make when the number of iterations is unknown. So this version does not have the previous two problems and it's easier to maintain. Nevertheless, it introduces another problem: it's harder to read and to understand.</p>
+<pre>
+def collect_photos3(self, destination):
+    n_photos_collected = 0
+    need_more_photos = True
+    collectors_iterator = iter(self.collectors)
+    while need_more_photos and collectors_iterator.has_next():
+        collector = collectors_iterator.next()
+         photos_iterator = collector(destination)
+        while need_more_photos and photos_iterator.has_next():
+            photo_info = photos_iterator.next()
+            self.add_photo(photo_info)
+            n_photos_collected += 1
+             if n_photos_collected &gt; self.max:
+                need_more_photos = False
+     return self.get_photos()
+</pre>
+<p>Version 4 is a crazy one. It tries to simulate to goto statement in Python. Everybody will tell you the goto statement is evil and well, most of the times, it is. But sometimes it has no good replacement like this one where we want to stop two nested loops with a statement. Too bad Python does not have a goto statement :(</p>
+<pre>
+def collect_photos4(self, destination):
+    n_photos_collected = 0
+    try:
+        for collector in self.collectors:
+            for photo_info in collector(destination):
+                self.add_photo(photo_info)
+                n_photos_collected += 1
+                if n_photos_collected &gt; self.max:
+                    raise TypeError('goto')
+     except TypeError:
+        pass
+     return self.get_photos()
+
+</pre>
+<p>Now, what if we separate the two problems this method is trying to solve: iterating over the photos and adding to our result set. Doing so we can write a simple generator that gives us a photo at a time and then a while loop that check there are more photos in this generator and we actually want them. I like this version more than any of the previous one but still, the while loop is not very readable.</p>
+<pre>
+def collect_photos5(self, destination):
+    def photos_fetcher():
+        for collector in self.collectors:
+            for photo in collector(destination):
+                yield photo
+     n_photos_collected = 0
+    photos_iterator = photos_fetcher()
+    while n_photos_collected &lt; self.max and photos_iterator.has_next():
+        photo_info = photos_iterator.next()
+        self.add_photo(photo_info)
+        n_photos_collected += 1
+     return self.get_photos()
+</pre>
+<p>And then, the last version. I decided to add the stop condition logic into the generator and as it is a nested function I can put a return statement to exit from the two nested loops. Then the main loop can be a for loop without the boilerplate management code that the while loop needed.</p>
+<pre>
+def collect_photos6(self, destination):
+    def photos_fetcher(max_photos):
+        n_photos_collected = 0
+        for collector in self.collectors:
+            for photo in collector(destination):
+                if n_photos_collected &gt; max_photos:
+                    return
+                yield photo
+                n_photos_collected += 1
+     for photo_info in photos_fetcher(self.max):
+        self.add_photo(photo_info)
+     return self.get_photos()
+</pre>
+<p>What version do you like most?</p>

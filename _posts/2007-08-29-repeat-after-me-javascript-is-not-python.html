@@ -1,0 +1,33 @@
+---
+layout: post
+title: 'Repeat after me: Javascript is not Python'
+date: 2007-08-29 20:20:45.000000000 -07:00
+categories:
+- Ordenadores
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>I guess I'm too used to the Python programming language that whenever I have to write simple Javascript functions I keep making the same mistakes. I tend to write as much functionality as possible in the server side (Python :) ) but in order to create rich user interfaces I have to use the client side (Javascript :( ) and things like this happens:</p>
+<pre>
+function addTopic(topic) {
+    var input_attrs = {
+        type: "checkbox",
+        checked: "checked",
+        name: "topics",
+        value: topic,
+    };
+    var li = Builder.node('li', [Builder.node('label', [Builder.node('input', input_attrs), topic.title])]);
+    $("topic_list").appendChild(li);
+}
+</pre>
+<p>For those of you who are curious, yes I'm using <a href="http://script.aculo.us/">Script.aculo.us</a> and <a href="http://www.prototypejs.org/">Prototype</a> libraries here but here is the point: There is a syntax error in the previous code, one that Firefox (and thus Firebug) won't catch but one that Internet Explorer will. The funny thing is the Internet Explorer error message:</p>
+<blockquote><p>Error: Expected identifier, string or number</p></blockquote>
+<p>So, anybody can answer me: is the trailing comma a real Javascript syntax error or just another Internet Explorer flaw?</p>

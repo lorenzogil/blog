@@ -1,0 +1,64 @@
+---
+layout: post
+title: 'Zope3 for Djangoers. Part 1: Installation'
+date: 2007-09-10 19:33:19.000000000 -07:00
+categories:
+- Ordenadores
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>I'm been working on a couple of <a href="http://www.djangoproject.com/">Django</a> projects for two months and I must say it's a great platform for making web applications. Even when this is not the first time I play with Django. I tend to forget things too easily...</p>
+<p>Having said that I must say I still prefer another <a href="http://www.python.org">Python</a> web framework. One that's pretty big but at the same time it's small. One that it's new but at the same time quite old. Yes, I'm talking about <a href="http://www.zope.org">Zope</a>. <a href="http://wiki.zope.org/zope3/Zope3Wiki">Zope3</a> precisely.</p>
+<p>But I still think there is no perfect framework and each one has its strengths and its weaknesses. So, as always, you should study your requirements and your problem and decide which tool is best for you. As an overly simplified statement I'd say take Django for small 3-5 months projects that won't change in the future and take Zope3 for everything else. Don't use the same hammer for every nail.</p>
+<p>Now, one of the things Django gets much better than Zope3 is documentation. It's much easier to get started with Django not only because it doesn't have a component architecture but because its tutorial and the rest of documentation really rocks.</p>
+<p>I'll try to write a series of posts to give the Zope3 newbie a little bit of knowledge so he/she doesn't get lost in the Zope3 forrest. And more important, I'll write them from a Djangoer perspective so you can always compare both frameworks.</p>
+<p>Note of caution: in the zope3 world there are a lot of ways to do the same things. You may like this or not but that's the way it is. In these articles I'll just choose one of such ways. Probably not the best and hopefully not the worst. Just don't think it is the canonical zope3 development process. I don't think there is such one.</p>
+<p>In this first article we'll talk about installation. In Django you just need to have Python installed in your box and a database management system like sqlite, Mysql or Postgresql. That's pretty much everything you need. Then you write this command:</p>
+<pre>
+django-admin.py startproject DJProject
+</pre>
+<p>and it creates an environment where you can start writing your code. Actually your are supposed to create applications inside of your project. I don't like this wording since for me, a project is an application most of the time. Usually I split my project in components following best practices but they are not applications by their own. I know, Django lets you live without creating apps but things get out of the main road and you start living by your own. So let's be good citizen and create our application:</p>
+<pre>
+cd DJProject
+./manage.py startapp DJApp
+</pre>
+<p>Finally if you want to start your development server all you have to do is type this command:</p>
+<pre>
+./manage.py runserver
+</pre>
+<p>Ok, let's jump into the zope3 side. In the old days Zope was a big fat framework and your app was just a module that you hooked into it. Now recently Zope3 has been splitted into lots of small components distributed as <a href="http://peak.telecommunity.com/DevCenter/PythonEggs">Python eggs</a>. This approach has the advantage that you only use what you need keeping it simpler. The disadvantage is that usually you don't know what you need :-) At least at the beginning. With some practice everything get easier.</p>
+<p>Zope3 doesn't currently work with Python 2.5 due to some changes in the C extensions mechanism that the 2.5 version introduced. There is quite a lot of C code in Zope3 to optimize things: some examples are the ZODB and the security system. That's why you should stick to 2.4 until the 2.5 support is finished.</p>
+<p>To work with Python eggs you need <a href="http://peak.telecommunity.com/DevCenter/EasyInstall">Easy Install</a> which is the tool than manages them. Installing it is super simple:</p>
+<pre>
+wget http://peak.telecommunity.com/dist/ez_setup.py
+python ez_setup.py
+</pre>
+<p>This will download everything needed to get started. Next step is install <a href="http://cheeseshop.python.org/pypi/zopeproject">zopeproject</a>. It is a great tool to start a Zope3 project. Its philosophy is that Zope3 is just a library and your app should use that library, not the other way around. It creates a <a href="http://www.python.org/dev/peps/pep-0333/">WSGI</a> application with a lot of default configuration made for you. Check out <a href="http://www.xml.com/pub/a/2006/09/27/introducing-wsgi-pythons-secret-web-weapon.html">this great article</a> to learn why WSGI is such a great thing. Ok, let's get back to our project:</p>
+<pre>
+easy_install zopeproject
+zopeproject Z3Project
+</pre>
+<p>The last command will ask you for a directory to place the zope3 eggs. This way other applications can use those eggs without duplicating them. It will also ask you for an administrator username and password. Something similar to what you get when you syncdb your Django project after adding the django.contrib.auth application.</p>
+<p>Now you have a Z3Project directory pretty similar to your myproject Django directory. Running an http development server is quite simple:</p>
+<pre>
+cd Z3Project
+bin/paste serve deploy.ini
+</pre>
+<p>But wait, I've got a bunch of files I don't understand!, what are they for? And where is my code supposed to live? Well, don't panic. I'll try to answer these questions. The environment we just created is managed by <a href="http://cheeseshop.python.org/pypi/zc.buildout/">buildout</a>. This software handle the dependencies for your project and create/update the starting points for running, testing and debugging it among other things. These are the files you get:</p>
+<ul>
+<li><strong>setup.py</strong>: it's a regular <a href="http://www.python.org/community/sigs/current/distutils-sig/">distutils</a> file that says how to make an egg for your application. The important thing is that it lists the list of eggs your app depends on.</li>
+<li><strong>zope.conf</strong>: them main zope configuration file. You put your database here and the ZCML file the application will load on startup. Kind of a part of the settings.py file of Django.</li>
+<li><strong>site.zcml</strong>: the file which configures the component architecture of Zope. More on this later.</li>
+<li><strong>buildout.cfg</strong>: the buildout configuration file that basically tells buildout to build the egg each time it is executed taking care of the dependencies and to update the scripts in the bin directory.</li>
+<li><strong>deploy.ini</strong>: as we use Paste for the http server, this file tell it which port and IP to use.</li>
+</ul>
+<p>And your code is supposed to live in the z3project subdirectory inside the Z3Project that zopeproject created. You will see a configure.zcml and an application.py files inside that directory, that is a Python package actually. The configure.zcml is included from the site.zcml we already saw and it loads a bunch of sane defaults for Zope3. It's also the place where you should register your own components. The application.py defines a WSGI application factory that Paste will use to run the http server.</p>
+<p>We'll see how to write our models in the next article. See you then!</p>

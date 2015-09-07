@@ -1,0 +1,29 @@
+---
+layout: post
+title: Uploading files to wordpress and SELinux problems
+date: 2008-07-24 18:36:54.000000000 -07:00
+categories: []
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>If you use Fedora and Wordpress and you get this error while trying to upload an image to your post:</p>
+<pre>
+The uploaded file could not be moved to /usr/share/wordpress/wp-content
+</pre>
+<p>All you need to do is labeling your uploads directory with the httpd_sys_content_t type:</p>
+<pre>
+[root@nyarlathotep wp-content]# pwd
+/usr/share/wordpress/wp-content
+</pre>
+<pre>
+[root@nyarlathotep wp-content]# chcon -t httpd_sys_content_t uploads/ -R
+</pre>
+<p>I hope this is useful for somebody else.</p>

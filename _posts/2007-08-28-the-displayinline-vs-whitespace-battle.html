@@ -1,0 +1,42 @@
+---
+layout: post
+title: The display:inline vs whitespace battle
+date: 2007-08-28 14:08:34.000000000 -07:00
+categories:
+- Ordenadores
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>Yesterday I spent quite a lot of time debugging an annoying CSS issue. I wanted to make an horizontal navigation bar so I started using this markup:</p>
+<pre>
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="/section1/"&gt;Section 1&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="/section2/"&gt;Section 2&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="/section3/"&gt;Section 3&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="/section4/"&gt;Section 4&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</pre>
+<p>In order to make the list horizontal there are two CSS techniques you can use: 1) float everything or 2) use display: inline. I decided to use option 2) since it is less intrusive and I didn't want to change the rest of the page layout.</p>
+<p>So this is how the CSS looks like:</p>
+<pre>
+ul { display: inline; }
+li { display: inline; border: 1px solid black; }
+</pre>
+<p>My problem was that there was some unwanted space between the list elements that made them difficult to stylish properly. After trying everything on earth to fix it I google for a while until I found the offending thing.</p>
+<p>As you make the elements inline whitespace matters and the new line characters in the markup are the ones making the little margin between the list elements. You can fix this problem putting all the elements in a single line but that's not very readable and it's quite ugly. So this is how I fix it:<br />
+<pre>
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="/section1/"&gt;Section 1&lt;/a&gt;&lt;/li
+&gt;&lt;li&gt;&lt;a href="/section2/"&gt;Section 2&lt;/a&gt;&lt;/li
+&gt;&lt;li&gt;&lt;a href="/section3/"&gt;Section 3&lt;/a&gt;&lt;/li
+&gt;&lt;li&gt;&lt;a href="/section4/"&gt;Section 4&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</pre>

@@ -1,0 +1,151 @@
+---
+layout: post
+title: Managing email, the Unix way
+date: 2010-08-21 17:20:49.000000000 -07:00
+categories:
+- Ordenadores
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<h2>Introduction</h2>
+<p>I've been using Evolution, the mail client, since 2000. I think it was the first Linux program along with Netscape that I remember using on a daily basis. What can I say about a program I've used for more than 10 years? Well I'm very grateful to it and I hope its development continues and it gets better and better every day. But now it's time for a change.</p>
+<h2>Motivation</h2>
+<p>There are two main reasons I wan to switch from Evolution to Mutt:</p>
+<ul>
+<li><strong>Speed</strong>. Evolution is now much faster than it used to be but when you have 5 Gigabytes of email it starts to behave slowly.</li>
+<li><strong>Knowledge</strong>. As an engineer I don't feel comfortably using something I don't totally understand and I even feel embarrased about my (lack of) understanding of email, something that I use (dammit, sometimes I even depend on) every day. That's why switching to Mutt makes sense. Its take on email forces you to do it the Unix way. This mean using several small programs together to accomplish your task and by dividing the task into small pieces you understand the big picture much better. Now I can tell the difference between a MTA, a MUA  and a MDA.</li>
+</ul>
+<h2>General architecture</h2>
+<p>[caption id="attachment_216" align="aligncenter" width="300" caption="Notification of email arriving"]<a href="/blog/assets/mail-architecture.png"><img class="size-medium wp-image-216" title="Genereal architecture" src="/blog/assets/mail-architecture-300x273.png" alt="General architecture" width="300" height="273" /></a><br />
+As you can see in the above figure, there are quite a lot of small programms (blue boxes and red circle) cooperating to deliver my mail for me. I'll try to explain what each of these ones do and how to configure them in the following sections.</p>
+<p>As there are a lot of configuration files involved I won't paste them here but point to the <a href="http://bitbucket.org/lgs/dotfiles/src">Mercurial repository</a> where I keep them versioned.</p>
+<h2>Step 1. Fetching email: getmail</h2>
+<p><a href="http://pyropus.ca/software/getmail/">getmail</a> is a MRA or Mail Retrieval Agent. Its main task is fetch your email from a POP3 or IMAP server. Unless you have a fixed IP and you run your own SMTP and IMAP/POP3 server you probably have your email delivered to your ISP or company's own servers.</p>
+<p>Another popular MRA is <a href="http://fetchmail.berlios.de/">fetchmail.</a> I use getmail because it's way simpler to configure and whetever I have to decided between two programs and one of them is written in python I go for that one. I'm very comfortable with Python so if I ever need to change something or go to the source to understand what's going on, that way is easier for me.</p>
+<p>Anyway, this is <a href="http://bitbucket.org/lgs/dotfiles/src/tip/.getmail/getmailrc">my configuration file for getmail</a>. You have to call the getmail program every time you want to download email from your IMAP/POP3 server. A typical run looks like this:</p>
+<pre>
+[lgs@ticotico ~]$ getmail
+getmail version 4.20.0
+Copyright (C) 1998-2009 Charles Cazabon.  Licensed under the GNU GPL version 2.
+SimpleIMAPSSLRetriever:lgs@correo.yaco.es:993:
+Enter password for SimpleIMAPSSLRetriever:lgs@correo.yaco.es:993:  *******
+  0 messages (0 bytes) retrieved, 0 skipped
+</pre>
+<p>As this is a very tedious task I have set up a cron task that runs every 5 minutes. Yes, I'm that anxious about email :-) But the problem is that if I put this in a cron job it will ask for the password every time it runs. One solution is to put the password in the getmailrc configuration file but I don't feel like sharing my password with the whole world and I really want to keep my configuration files in Bitbucket. So the other solution is to use <a href="http://en.wikipedia.org/wiki/Expect">expect</a>. This is a common Unix tool for manipulating other programs. This is my getmail-no-password expect script:</p>
+<pre>
+#!/usr/bin/expect -f
+
+set timeout 600
+spawn /usr/bin/getmail
+expect -exact "Enter password for SimpleIMAPSSLRetriever:lgs@correo.yaco.es:993:  "
+send -- "put-your-real-password-here\r"
+expect eof
+exit
+</pre>
+<p>So expect will call getmail and as soon as the "Enter password ..." phrase goes to stdin it will send my real password, followed by the '\r' character. One minor issue is I have to give expect a timeout. After this time has passed expect will stop running. 600 seconds (10 minutes) is more than enough for running this script in my cron job but the first time I synchronize with my IMAP server it takes way more time than this so I just run getmail and enter my password manually instead of using the getmail-no-password expect wrapper.</p>
+<p>This script is not in my Bitbucket repository for obvious reasons :-)</p>
+<p>This is my crontab for fetching email:</p>
+<pre>*/5 * * * * /home/lgs/bin/getmail-no-password &gt; /dev/null</pre>
+<p>Note that I redirect stdout to /dev/null but not stderr so cron will email me if something goes wrong with getmail or the expect wrapper script.</p>
+<h2>Step 2. Filtering email: maildrop</h2>
+<p>As soon as getmail gets the mail it can save it to the final destination, e.g. my Maildir directory, or we can send it to the MDA (Mail Delivery Agent) to do more powerful things. In my case I went for <a href="http://www.courier-mta.org/maildrop/">dropmail</a> but as always there are other options like <a href="http://www.procmail.org/">procmail</a>. Procmail is more mature in the Unix world but I like dropmail syntax better.</p>
+<p>getmail fetches an email message from the server and then run dropmail with the mail message as the argument. As you can see in my <a href="http://bitbucket.org/lgs/dotfiles/src/tip/.mailfilter">dropmail configuration file (called .mailfilter)</a>, I do several things with a mail message:</p>
+<ul>
+<li>Pipe it to through reformail to add a Lines header, which is useful in Mutt.</li>
+<li>Pipe it to spambayes (sb_filter) to add antispam features to my mail system. More on this later</li>
+<li>Send a notification to my GNOME desktop in case the message is not spam. More on this later.</li>
+<li>Filter the message and store it in one of my mail folders depending on several regular expression rules that match agains some header values of the mail message.</li>
+</ul>
+<h2>Step 3. Anti spam: spam bayes</h2>
+<p>The typical antispam software in Unix system is <a href="http://spamassassin.apache.org/">spamassassin</a> but I use <a href="http://spambayes.sourceforge.net/">Spam Bayes</a> because of several reasons:</p>
+<ul>
+<li>I setup spambayes in the previous company I worked for and I was very happy with its results.</li>
+<li>In my current company, spamassassin is used and it's not very effective. This may be a configuration issue.</li>
+<li>Spamassassin eats a lot of cpu.</li>
+<li>Did I mention that spam bayes is written in python?</li>
+</ul>
+<p>The way spam bayes work is quite simple: first you need to train it giving a bunch of spam messages and a bunch of ham (ham is the opposite of spam, in other words, good mail) messages. You do it with the following command line:</p>
+<pre>sb_mboxtrain.py -g .inbox/ -s .spam/</pre>
+<p>This will create a hammie.db database in Berkeley format. Now you should write a configuration file to tell spam bayes where this database file is located so it can use it to filter spam messages when called from dropmail. Here is <a href="http://bitbucket.org/lgs/dotfiles/src/tip/.spambayesrc">my spambayes configuration file</a>.</p>
+<p>If you remember my maildrop configuration file this was the line that calls spam bayes:</p>
+<pre>xfilter "python -W ignore:::: /usr/bin/sb_filter.py -d ~/.hammie.db"</pre>
+<p>What's that -W ignore::: argument to Python? Well spam bayes spit some warnings when run under python 2.5 or 2.6 and that's not good for maildrop because python writes the warnings to stderr and maildrop thinks there is a problem with that process and aborts the mail delivery. So by calling python with the -W ignore::::: argument we tell it to keep the warnings quiet and don't write them to stderr. I hope spam bayes get updated soon and I can remove this hack.</p>
+<p>The good thing about spam bayes is that it can learn with your help. Any time it fails when filtering a message you can retrain it fix its behaviour. By the way, all that spam bayes does is adding some headers to the message and then you need to add some rules to your maildrop configuration file to put the message where it belongs. The interesting thing is that sometimes a message is not spam or ham because spam bayes is not sure. You can store these messages in a folder different than the spam folder so you can look it more frequently and teach spam bayes with them.</p>
+<h2>Step 4. Reading and composing emails: mutt</h2>
+<p>From all text based email clients mutt is the most popular. <a href="https://twitter.com/herraiz">Israel Herraiz</a> told me about <a href="http://sup.rubyforge.org/">Sup</a> and it looks very promising. I think I'll give it a try pretty soon. But for now, I'll stick to Mutt for a while.</p>
+<p>Mutt is the most complex software from all the programs I mentioned in this post, so <a href="http://bitbucket.org/lgs/dotfiles/src/tip/.muttrc">its configuration file</a> is the biggest one. Hopefully I have added enough comments to make it easier to understand the options that I use.</p>
+<h2>Step 5. Sending emails: msmtp</h2>
+<p>The last step consist in sending emails. Until recently Mutt didn't know how to talk SMTP, the protocol for sending emails and due to popular demand that feature has been added. But in keeping the original Mutt spirit and thus, the Unix way of using one program for each task, I decided to go for <a href="http://msmtp.sourceforge.net/">msmtp</a>, a small client for sending emails. As always, there are plenty of options in Linux land but I think msmtp does a very decent job. As usual, you can check my <a href="http://bitbucket.org/lgs/dotfiles/src/tip/.msmtprc">msmtp configuration file</a> in Bitbucket. Remember to set the set sendmail="/usr/bin/msmtp" option in Mutt.</p>
+<p>In these days full of spam it's usual that your SMTP server ask you for authorization information unless you are in the same private network. As in the getmail case I didn't want to write my password in plain text in the msmtp configuration file. Fortunately msmtp has support for GNOME (and MacOS X) keyring so you can simple store your password in the safe keyring of your operating system and msmtp will pick it up for you there. The only issue is that you need to be logged in a graphical GNOME session in order have access to the keyring.</p>
+<p>Anyway, to store your password in the keyring use the following command changing your username and server for your own values:</p>
+<pre>./msmtp-gnome-tool.py --set-password --username lgs --server correo.yaco.es</pre>
+<p>Unfortunately you need the source code of msmtp to use this command since it is not in the msmtp rpm package that I installed in my Fedora system. So go ahead and grab it. Once you untar it, it should be in the msmtp/scripts/msmtp-gnome-tool/msmtp-gnome-tool.py</p>
+<h2>Bonus track 1: notifications</h2>
+<p>Mutt is great and all but one thing I miss from Evolution is GNOME notifications every time a new mail reaches my inbox. Well, with such flexible system as the one I built, that's not difficult to have. Just add this line to the maildrop configuration file:</p>
+<pre>xfilter "python /home/lgs/bin/email_notificator.py"</pre>
+<p>I added after storing spam in the spam folder since I don't want to be notified when spam arrives.</p>
+<p>Here is the content of my email_notificator.py script:</p>
+<pre>
+import email
+import subprocess
+import sys
+
+if __name__ == '__main__':
+    data = sys.stdin.read()
+
+    message = email.message_from_string(data)
+    from_ = 'Unknown from'
+    if 'From' in message:
+        from_ = message['From']
+
+    subject = 'Unknown subject'
+    if 'Subject' in message:
+        subject = message['Subject']
+
+    cmd = ['/usr/bin/notify-send', '-u', 'critical', '-t', '5000',
+           '-i', '/usr/share/icons/gnome/48x48/actions/mail_new.png',
+           '%s' % from_, '%s' % subject]
+    subprocess.call(cmd, env={'DISPLAY': ':0.0'})
+    print data
+</pre>
+<p>No rocket science here. In the following screenshot you can see the script in action:</p>
+<figure>
+  <img title="Notification of email arriving" src="/blog/assets/email-arriving.png" alt="Notification of email arriving" />
+  <figcaption>Notification of email arriving</figcaption>
+</figure>
+<h2>Bonus track 2: logs rotation</h2>
+<p>Several programs of my email ecosystem log information to different files. As always you should rotate your logs if you don't want your hard disk to become full really fast. Just add a <a href="http://bitbucket.org/lgs/dotfiles/src/tip/logrotate.conf">configuration file for log rotate</a> as mine and add a line to your crontab like this one:</p>
+<pre>
+0 9 * * * /usr/sbin/logrotate /home/lgs/mail_logs/logrotate.conf --state=/home/lgs/mail_logs/logrotate.status
+</pre>
+<h2>Bonus track 3: reading mails from my android device</h2>
+<p>One of the nice things of being a text only program is that you can use mutt from any computer that can connect through a ssh link to the computer you have your mail and mutt installed. In Android there is the fantastic <a href="http://code.google.com/p/connectbot/">ConnectBot</a> application which let you do just that. See this screenshot in you don't believe it :-)</p>
+<figure>
+  <img title="mutt-in-android" src="/blog/assets/mutt-in-android-300x240.jpg" alt="Mutt in Android" />
+  <figcaption>Mutt in Android</figcaption>
+</figure>
+<p>The only gotchas of using Mutt from my Android phone is that the GNOME integration gets in my way: now I can't send emails since msmtp will look for the password in the GNOME keyring and there is no such thing in Android. One way to fix this issue is to configure another account in msmtp which doesn't use the keyring but ask for the password manually and switch to that account with a key combination when using it from the phone.</p>
+<h2>TODO</h2>
+<ul>
+<li>Mark the spam message as already readed so I don't get distracted every time a spam message arrives my spam folder. Then once in a while I can review them looking for false positives.</li>
+<li>Addressbook integration.</li>
+<li>PGP integration</li>
+</ul>
+<h2>References</h2>
+<ul>
+<li><a href="http://www.mutt.org/doc/manual/">Mutt Manual</a></li>
+<li><a href="http://wiki.mutt.org/">Mut Wiki</a></li>
+<li><a href="http://wiki.mutt.org/index.cgi?MuttGuide">Mutt newbie guide</a></li>
+<li><a href="http://mutt.blackfish.org.uk/">Mutt overview for newbies</a></li>
+<li><a href="http://www.therandymon.com/papers/using-mutt.pdf">The Woodnotes Guide to the Mutt Email Client</a></li>
+<li><a href="http://www.entrian.com/sbwiki/SbFilter">Spam Bayes wiki</a></li>
+</ul>
+</div>

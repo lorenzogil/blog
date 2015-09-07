@@ -1,0 +1,26 @@
+---
+layout: post
+title: Encoding videos for the Nokia N800
+date: 2008-11-23 15:13:16.000000000 -08:00
+categories:
+- Ordenadores
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>Quick command reminder about how to encode videos for watching them in the Nokia N800:</p>
+<pre>
+mencoder Fringe-S01E06.avi -o Fringe-S01E06-n800.avi -oac mp3lame -lavcopts acodec=libmp3lame:abitrate=96 -ovc lavc -lavcopts vcodec=mpeg4:autoaspect:vbitrate=600:vpass=1:turbo -vf scale=400:240 -ffourcc DIVX -idx
+</pre>
+<p>Update: add these options to embed subtitles:</p>
+<pre>
+-sub Fringe-S01E06.srt -subcp latin5 -subfont-text-scale 4
+</pre>
+<p>You will need a subfont.ttf font file in ~/.mplayer/</p>

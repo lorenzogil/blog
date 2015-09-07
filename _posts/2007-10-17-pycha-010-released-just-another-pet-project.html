@@ -1,0 +1,28 @@
+---
+layout: post
+title: Pycha 0.1.0 released. Just another pet project
+date: 2007-10-17 21:55:24.000000000 -07:00
+categories:
+- Ordenadores
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>I've been writing Pycha in the last days. It is a Python library for drawing Charts as its name suggests :-) You can learn more about it at <a href="https://bitbucket.org/lgs/pycha">https://bitbucket.org/lgs/pycha</a></p>
+<p><img src="/blog/assets/piechart.png" title="Sample pycha chart" alt="Sample pycha chart" height="400" width="400" /></p>
+<p>What I'd like to comment here is the amount of work needed for releasing a piece of free software. We usually think that's not too much but I always get surprised about how many things you need to do <strong>besides</strong> writing the code.</p>
+<p>You need to choose a license, this will probably means reading for a while about the options out there and try to make a balance between a license that will make your software easy to distribute and a license that won't make you (or your users) lose freedom.</p>
+<p>You need to package the software. I chosed <a href="http://peak.telecommunity.com/DevCenter/setuptools">setuptools</a> for this task as I like the idea of Python Eggs. As this is my first egg, I needed to read the manual, do some tests, try again and so on.</p>
+<p>You need to write some decent docs. This means installation instruction, examples, general overview, etc. I did it in English and Spanish as some times I think I do too many things in that foreign language forgetting about my own language. Writing this blog is one of them :|</p>
+<p>You need to setup a website with the docs, some instructions for downloading and getting the software, a bug tracking system and probably a wiki. Fortunately we have <a href="http://trac.edgewall.com">Trac</a> which makes this pretty easy. I got a problem with Trac in Fedora 7 but reading Trac's Wiki solved it (tip: you need the python-sqlite2 package).</p>
+<p>You need to write some tests, otherwise nobody with a sane brain will want to use your risky library. This is something I still need to do but hopefully I'll be able to do it before the weekend.</p>
+<p>You need to do the actual release. This involve writing an entry in the CHANGES.txt file, updating the version, tagging the repository, uploading to PyPi, etc. I used <a href="http://svn.zope.org/Sandbox/philikon/foundation/releasing-software.txt?rev=80625&amp;view=auto">this document</a> as a release guide.</p>
+<p>Nothing is really mandatory but if you want to get some value from releasing a project with a free software license you pretty much need to do all of the above. In other words, no docs, no tests, no bug tracking system means no people interested, no community, no feedback, no bug reports, no patches, nothing.</p>
+<p>So go and play with pycha and tell me what you think!</p>

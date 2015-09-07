@@ -1,0 +1,27 @@
+---
+layout: post
+title: First impressions with Liferay
+date: 2011-10-09 14:36:12.000000000 -07:00
+categories:
+- Ordenadores
+- Yaco
+tags: []
+status: publish
+type: post
+published: true
+author:
+  login: admin
+  email: lorenzo.gil.sanchez@gmail.com
+  display_name: lgs
+  first_name: Lorenzo
+  last_name: Gil Sánchez
+---
+<p>A couple of weekends ago I had my first experience customizing a Liferay site. I wrote a very simple theme to change the standard look &amp; feel and I also wrote some portlets in several differente languages. The goal was to analyze which portlet technology was the best to suit our needs.</p>
+<p>Writing the theme was not difficult at all. Liferay has an excellent SDK for writing plugins, which include themes. I didn't start from scratch but used the <a href="http://liferay-themes.sourceforge.net/2011/09/desktop-and-mobile-liferay-theme/">great HTML5Goodness responsive</a> theme. The main navigation menu was easy to do since there is a method to iterate over first level pages. However, when I tried to do the same with the footer menu I couldn't find an easy and clean way to do it. I wanted to put standard links in the footer menu as the Terms of Use, the Privacy Policy and so on in the footer menu but I didn't know how to organize this stuff in Liferay CMS so I could retrieve them back easily. I thought about using a portlet for the footer but I think that's not the way to do it since that would affect the portlets layout for all the pages. So I added some variables in the XML that describes the theme and hardcoded the links there. At least I don't have to change the theme code if we change any of those links.</p>
+<p>About the portlets, we needed to write a portlet that pulls the content from an external service via REST calls and render it nicely using some kind of templates. These were the attempts I made and my conclusións:</p>
+<ul>
+<li><strong>Portlet written in Java</strong>: this was the obvious choice. The advantages was full access to Liferay API and easyness to integrate the portlet with the SDK stanrdard procedures. The disadvantages were, well, it has to be written in Java. We are far less productive in Java that with other languages. Just for making an HTTP request is quite involved. Hopefully Liferay has APIs for making this easier.</li>
+<li><strong>Portlet written in Javascript</strong>: This looked promising and was easy to setup, the problem was the importPackage and importClass functions were not available from the Rhino environment. This made Javascript just a toy language in Liferay since the language itself has no useful standard library and it needs to leverage the net or filesystem or any other calls to the runtime it runs on. This make javascript a very integrable language but also a very dependent language. If we can't call Liferay API from Javascript and there are no network functions in the language itself we can't use it for our purposes.</li>
+<li><strong>Portlet written in Python</strong>: Our last try was writting the portlet in Python. First we had to update the Jython jar that was included in Liferay since it was a little bit old. Then we added the <a href="http://opensource.xhaus.com/projects/show/jyson">jyson</a> jar to the jython jar itself to have support for json parsing. We also used Liferay Network APIs since we couldn't import urllib2 from Python. Finally we even managed to use the Python debugger (PDB) by running Tomcat in the foreground. (bin/catalina.sh run)</li>
+</ul>
+<p>One important thing when writing portlets with a scripting language like Python or Javascript is that Liferay will concatenate all your modules into a single big file before running it in the scripting engine (jython or rhino, in our case). This is important to know when reading errors information where the line numbers is not always what we expect. In Python, we can avoid this behavior by changing the PYTHONPATH dinamically at runtime (at the beginning of our script) and then, importing our regular modules will work again.</p>
