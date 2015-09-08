@@ -2,9 +2,11 @@
 title: Memory Dump
 email: lorenzo.gil.sanchez@gmail.com
 description: > # this means to ignore newlines until "baseurl:"
-  Write an awesome description for your new site here. You can edit this
-  line in _config.yml. It will appear in your document head meta (for
-  Google search results) and in your feed.xml site description.
+  Memory Dump is a blog attempt featuring Lorenzo Gil Sanchez
+  and his thoughts and experiences. The author is well known for
+  his frequent memory corruption issues so the main goal for this
+  blog is to help him remember important things about everyday
+  work stuff. Probably not something you are interested in ...
 baseurl: "/blog" # the subpath of your site, e.g. /blog/
 url: "http://www.lorenzogil.com" # the base hostname & protocol for your site
 twitter_username: lorenzogil
