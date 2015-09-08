@@ -12,6 +12,7 @@ url: "http://www.lorenzogil.com" # the base hostname & protocol for your site
 twitter_username: lorenzogil
 github_username:  lorenzogil
 permalink: /:year/:month/:day/:title/
+timezone: America/Los_Angeles
 
 # Build settings
 markdown: kramdown
