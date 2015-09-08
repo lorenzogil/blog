@@ -15,11 +15,18 @@
     line-height: 56px;
     letter-spacing: -1px;
     margin-bottom: 0;
-    float: left;
+    background: url(/blog/assets/lgs-header.png) no-repeat scroll 0% 0%;
+    text-align: right;
+    display: block;
+    padding-bottom: 74px;
 
     &,
     &:visited {
         color: $grey-color-dark;
+    }
+
+    small {
+        display: block;
     }
 }
 
