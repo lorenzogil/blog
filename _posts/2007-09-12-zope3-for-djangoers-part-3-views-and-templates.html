@@ -32,14 +32,14 @@ def all_my_records(request):
 &lt;head&gt;&lt;title&gt;Record list&lt;/title&gt;&lt;/head&gt;
 &lt;body&gt;
   &lt;h1&gt;My records:&lt;/h1&gt;
-  {% for record in records %}
-    &lt;h2&gt;{{ record.title }} - {{ record.artist }}&lt;/h2&gt;
+  &#123% for record in records %&#125
+    &lt;h2&gt;&#123&#123 record.title &#125&#125 - &#123&#123 record.artist &#125&#125&lt;/h2&gt;
     &lt;ul&gt;
-    {% for song in record.song_set.all() %}
-      &lt;li&gt;{{ song.title }} - {{ song.length }} seconds&lt;/li&gt;
-    {% endfor %}
+    &#123% for song in record.song_set.all() %&#125
+      &lt;li&gt;&#123&#123 song.title &#125&#125 - &#123&#123 song.length &#125&#125 seconds&lt;/li&gt;
+    &#123% endfor %&#125
     &lt;/ul&gt;
-  {% endfor %}
+  &#123% endfor %&#125
 &lt;/body&gt;
 &lt;/html&gt;
 </pre>
